@@ -1,0 +1,78 @@
+{
+  "app_name": "App Launcher",
+  "app_id": "AppLauncher",
+  "accent_color": "#7C5CFF",
+  "support_url": "https://github.com/your-user/app-launcher/issues/new",
+
+  "server": {
+    "protocol": "ftp",
+    "host": "127.0.0.1",
+    "port": 2121,
+    "user": "demo",
+    "password": "demo"
+  },
+
+  "auth": {
+    "type": "none"
+  },
+
+  "self_update": {
+    "remote_dir": "/launcher",
+    "file_name": "Launcher.exe"
+  },
+
+  "apps": [
+    {
+      "id": "notes",
+      "name": "Notes Studio",
+      "description": "Aplicativo de demonstração servido pelo tools/demo_server.py.",
+      "remote_dir": "/apps/notes",
+      "package": "notes.zip",
+      "install_dir": "Notes Studio",
+      "executable": "notes.bat",
+      "env": { "NOTES_LAUNCHED_BY": "app-launcher" },
+      "extra_actions": [
+        { "label": "Abrir ferramenta de diagnóstico", "executable": "diagnostics.bat" }
+      ],
+      "options": [
+        { "key": "verbose", "label": "Modo detalhado", "type": "bool", "env": "NOTES_VERBOSE",
+          "description": "Exibe mensagens extras ao iniciar." },
+        { "key": "workspace", "label": "Pasta de trabalho padrão", "type": "text", "env": "NOTES_WORKSPACE",
+          "default": "C:\\Notes" }
+      ],
+      "custom_builds": {
+        "remote_subdir": "custom-builds",
+        "code_label": "Ticket",
+        "code_pattern": "^\\d{5}$",
+        "code_hint": "Digite o número do ticket informado pelo suporte (5 dígitos).",
+        "package_names": ["build.zip", "dist.zip"],
+        "carry_over_files": ["settings.ini"]
+      }
+    },
+    {
+      "id": "reports",
+      "name": "Reports Viewer",
+      "description": "Segundo aplicativo de demonstração, sem opções extras.",
+      "remote_dir": "/apps/reports",
+      "package": "reports.zip",
+      "install_dir": "Reports Viewer",
+      "executable": "reports.bat"
+    }
+  ],
+
+  "downloads": [
+    {
+      "label": "Ferramentas",
+      "remote_dir": "/tools",
+      "destination": "Ferramentas",
+      "extra_files": [
+        { "name": "sample-data.csv", "remote_dir": "/apps/reports", "badge": "Reports" }
+      ]
+    },
+    {
+      "label": "Instaladores",
+      "remote_dir": "/installers",
+      "destination": "Instaladores"
+    }
+  ]
+}

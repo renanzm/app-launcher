@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.env
+.env.*
+
+# Build / PyInstaller
+build/
+dist/
+*.spec
+!Launcher.spec
+
+# Configuração real do ambiente (use launcher_config.example.json como base)
+launcher_config.json
+
+# Gerados em tempo de execução
+*.exe
+_update_launcher.bat
+.launcher-tmp/
+*.part
+
+# Servidor de demonstração (tools/demo_server.py)
+demo-server/
+
+# Apps instalados ao rodar o launcher a partir do código-fonte
+Notes Studio*/
+Reports Viewer/
+Ferramentas/
+Instaladores/
+
+# IDE / editor
+.vscode/
+.idea/
+.cursor/
+
+# OS
+Thumbs.db
+Desktop.ini
