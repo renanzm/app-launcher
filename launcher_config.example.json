@@ -2,7 +2,7 @@
   "app_name": "App Launcher",
   "app_id": "AppLauncher",
   "accent_color": "#7C5CFF",
-  "support_url": "https://github.com/your-user/app-launcher/issues/new",
+  "support_url": "https://github.com/renanzm/app-launcher/issues/new",
 
   "server": {
     "protocol": "ftp",
