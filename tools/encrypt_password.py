@@ -1,11 +1,11 @@
-"""Gera o token `password_enc` da senha do servidor.
+"""Generates the `password_enc` token for the server password.
 
-Uso:
-    python -m tools.encrypt_password --new-secret     # cria um segredo novo
+Usage:
+    python -m tools.encrypt_password --new-secret     # creates a new secret
     python -m tools.encrypt_password --secret <base64>
 
-O segredo vai em `server.secret` no launcher_config.json; o token vai em
-`password_enc` (na configuração ou no JSON apontado por `credentials_url`).
+The secret goes in `server.secret` in launcher_config.json; the token goes in
+`password_enc` (in the configuration or in the JSON that `credentials_url` points to).
 """
 
 import argparse
@@ -18,19 +18,19 @@ from launcher import crypto
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--secret", help="segredo existente (base64)")
-    group.add_argument("--new-secret", action="store_true", help="gera um segredo novo")
+    group.add_argument("--secret", help="existing secret (base64)")
+    group.add_argument("--new-secret", action="store_true", help="generate a new secret")
     args = parser.parse_args()
 
     secret = crypto.generate_secret() if args.new_secret else args.secret
-    password = getpass("Senha do servidor (não será exibida): ")
+    password = getpass("Server password (hidden): ")
     if not password:
-        print("Senha vazia.", file=sys.stderr)
+        print("Empty password.", file=sys.stderr)
         return 1
 
     token = crypto.encrypt(password, secret)
     if crypto.decrypt(token, secret) != password:
-        print("Falha na verificação do token.", file=sys.stderr)
+        print("Token verification failed.", file=sys.stderr)
         return 2
 
     if args.new_secret:

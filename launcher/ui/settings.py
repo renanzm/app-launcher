@@ -1,32 +1,36 @@
-"""Preferências do launcher e opções do aplicativo selecionado.
+"""Launcher preferences and the selected application's options.
 
-Os valores são gravados ao fechar o diálogo, por qualquer caminho (botão,
-Esc ou fechamento pelo sistema) — não há botão "Salvar" para esquecer.
+Values are saved when the dialog closes, whichever way it closes (button,
+Esc or the system) — there is no "Save" button to forget.
 """
 
 from __future__ import annotations
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import (
+    QComboBox, QHBoxLayout, QLineEdit, QScrollArea, QVBoxLayout, QWidget,
+)
 
+from .. import i18n
+from ..i18n import tr, tr_noop
 from .widgets import FramelessDialog, ToggleSwitch, divider, label
 
-# (chave, rótulo, descrição) das preferências gerais.
+# (key, label, description) of the general preferences; translated when displayed.
 GENERAL_PREFS = (
-    ("auto_update", "Atualizar aplicativos ao abrir",
-     "Instala sozinho a versão nova do aplicativo selecionado, se ele já estiver instalado."),
-    ("auto_update_launcher", "Atualizar o launcher ao abrir",
-     "Sem esta opção, o launcher pergunta antes de se atualizar."),
-    ("keep_open", "Manter o launcher aberto",
-     "Por padrão o launcher fecha depois de iniciar um aplicativo."),
+    ("auto_update", tr_noop("Update applications on startup"),
+     tr_noop("Installs the new version of the selected application by itself, if it is already installed.")),
+    ("auto_update_launcher", tr_noop("Update the launcher on startup"),
+     tr_noop("Without this option, the launcher asks before updating itself.")),
+    ("keep_open", tr_noop("Keep the launcher open"),
+     tr_noop("By default the launcher closes after starting an application.")),
 )
-AUTO_LOGIN_PREF = ("auto_login", "Entrar automaticamente",
-                   "Usa as credenciais salvas e pula a tela de login.")
+AUTO_LOGIN_PREF = ("auto_login", tr_noop("Sign in automatically"),
+                   tr_noop("Uses the saved credentials and skips the login screen."))
 
 
 class SettingsDialog(FramelessDialog):
     def __init__(self, config, store, app, parent=None):
-        super().__init__("Configurações", width=440, parent=parent)
+        super().__init__(tr("Settings"), width=440, parent=parent)
         self._store = store
         self._app = app
         self._pref_toggles = {}
@@ -41,19 +45,21 @@ class SettingsDialog(FramelessDialog):
         lay.setSpacing(12)
         scroll.setWidget(content)
 
-        lay.addWidget(label("GERAL", "overline"))
+        lay.addWidget(label(tr("GENERAL"), "overline"))
         prefs = list(GENERAL_PREFS)
         if config.auth.enabled:
             prefs.append(AUTO_LOGIN_PREF)
         for i, (key, title, desc) in enumerate(prefs):
             if i:
                 lay.addWidget(divider())
-            toggle = self._toggle_row(lay, title, desc, bool(store.pref(key, False)))
+            toggle = self._toggle_row(lay, tr(title), tr(desc), bool(store.pref(key, False)))
             self._pref_toggles[key] = toggle
+        lay.addWidget(divider())
+        self._language_row(lay, store)
 
         if app.options:
             lay.addSpacing(8)
-            lay.addWidget(label(f"OPÇÕES · {app.name.upper()}", "overline"))
+            lay.addWidget(label(tr("OPTIONS · {name}", name=app.name.upper()), "overline"))
             for i, option in enumerate(app.options):
                 if i:
                     lay.addWidget(divider())
@@ -68,6 +74,23 @@ class SettingsDialog(FramelessDialog):
         self.body.addWidget(scroll)
         content.adjustSize()
         scroll.setMinimumHeight(min(460, content.sizeHint().height() + 4))
+
+    def _language_row(self, layout, store):
+        row = QHBoxLayout()
+        row.setSpacing(12)
+        texts = QVBoxLayout()
+        texts.setSpacing(2)
+        texts.addWidget(label(tr("Language"), "body"))
+        texts.addWidget(label(tr("Takes effect the next time the launcher starts."), "caption", wrap=True))
+        row.addLayout(texts, 1)
+        self._language_combo = QComboBox()
+        self._language_combo.addItem(tr("Automatic"), i18n.AUTO)
+        for code, name in i18n.LANGUAGES.items():
+            self._language_combo.addItem(name, code)
+        current = i18n.normalize(store.pref("language", "")) or i18n.AUTO
+        self._language_combo.setCurrentIndex(max(0, self._language_combo.findData(current)))
+        row.addWidget(self._language_combo)
+        layout.addLayout(row)
 
     @staticmethod
     def _toggle_row(layout, title: str, description: str, checked: bool) -> ToggleSwitch:
@@ -100,6 +123,7 @@ class SettingsDialog(FramelessDialog):
     def _save(self):
         for key, toggle in self._pref_toggles.items():
             self._store.set_pref(key, toggle.isChecked())
+        self._store.set_pref("language", self._language_combo.currentData())
         for key, (option, widget) in self._option_widgets.items():
             if option.type == "bool":
                 value = widget.isChecked()

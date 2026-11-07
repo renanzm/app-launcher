@@ -1,4 +1,4 @@
-"""Ponto de entrada: configuração → splash → login (opcional) → janela principal."""
+"""Entry point: configuration → splash → login (optional) → main window."""
 
 from __future__ import annotations
 
@@ -10,13 +10,14 @@ from pathlib import Path
 
 def _parse_args(argv):
     parser = argparse.ArgumentParser(prog="launcher", add_help=True)
-    parser.add_argument("--config", type=Path, help="caminho do launcher_config.json")
-    parser.add_argument("--no-splash", action="store_true", help="não exibe a tela de abertura")
+    parser.add_argument("--config", type=Path, help="path to launcher_config.json")
+    parser.add_argument("--lang", help="interface language (en, pt-BR); default: automatic")
+    parser.add_argument("--no-splash", action="store_true", help="do not show the splash screen")
     return parser.parse_known_args(argv)[0]
 
 
 def main(argv=None) -> int:
-    # Valida HTTPS com o repositório de certificados do Windows (proxies corporativos).
+    # Validate HTTPS against the Windows certificate store (corporate proxies).
     try:
         import truststore
         truststore.inject_into_ssl()
@@ -27,9 +28,10 @@ def main(argv=None) -> int:
     from PyQt6.QtGui import QIcon
     from PyQt6.QtWidgets import QApplication
 
-    from . import auth, self_update
+    from . import auth, i18n, self_update
     from .config import ConfigError, find_config
     from .paths import BASE_DIR, BUNDLE_DIR, resource_path
+    from .i18n import tr
     from .state import StateStore, default_state_path
     from .ui import theme
     from .ui.widgets import Task
@@ -37,6 +39,8 @@ def main(argv=None) -> int:
     argv = list(sys.argv if argv is None else argv)
     args = _parse_args(argv[1:])
 
+    # Language: --lang > system. The saved preference and the config apply once they are loaded.
+    i18n.set_language(i18n.resolve(args.lang))
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(argv)
 
@@ -45,7 +49,7 @@ def main(argv=None) -> int:
     except ConfigError as exc:
         from .ui import messages
         theme.apply(app, "#7C5CFF")
-        messages.error(None, "Configuração inválida", messages.describe(exc))
+        messages.error(None, tr("Invalid configuration"), messages.describe(exc))
         return 2
 
     app.setApplicationName(config.app_name)
@@ -55,6 +59,8 @@ def main(argv=None) -> int:
     theme.apply(app, config.accent_color)
 
     store = StateStore(default_state_path(config.app_id))
+    # --lang > language chosen in Settings > "language" in the config > system.
+    i18n.set_language(i18n.resolve(args.lang, store.pref("language", ""), config.language))
     argv, self_update_failed = self_update.consume_applied_args(argv, store)
 
     splash = None
@@ -88,8 +94,8 @@ def main(argv=None) -> int:
     window.show()
     code = app.exec()
     if Task._running:
-        # O usuário fechou no meio de um download: não há como interromper o
-        # ftplib com segurança, então encerra o processo sem esperar a thread.
+        # The user closed the window mid-download: ftplib cannot be interrupted
+        # safely, so the process ends without waiting for the thread.
         os._exit(code)
     return code
 

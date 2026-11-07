@@ -8,8 +8,9 @@ POST (JSON) para `auth.url`. A autenticação é aceita quando a resposta é
 from __future__ import annotations
 
 from .config import AuthConfig
+from .i18n import tr, tr_noop
 
-AUTO_LOGIN_FAIL_MSG = "Não foi possível entrar automaticamente. Verifique usuário e senha."
+AUTO_LOGIN_FAIL_MSG = tr_noop("Could not sign in automatically. Check your username and password.")
 
 _USER_KEY = "login_user"
 _PASSWORD_KEY = "login_password"
@@ -46,9 +47,9 @@ def resolve_startup_login(enabled, user, password, authenticate_fn):
     try:
         if authenticate_fn(user, password):
             return True, None
-        return False, AUTO_LOGIN_FAIL_MSG
+        return False, tr(AUTO_LOGIN_FAIL_MSG)
     except Exception as exc:
-        return False, f"Falha na autenticação automática:\n{exc}"
+        return False, tr("Automatic sign-in failed:\n{error}", error=exc)
 
 
 def session_env(auth: AuthConfig, user: str, password: str) -> dict:

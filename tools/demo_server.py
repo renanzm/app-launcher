@@ -1,12 +1,12 @@
-"""Servidor FTP local com aplicativos de exemplo, para testar o launcher.
+"""Local FTP server with sample applications, to try out the launcher.
 
-Uso:
+Usage:
     pip install -r requirements-dev.txt
-    python -m tools.demo_server            # escuta em 127.0.0.1:2121 (demo/demo)
-    python -m launcher                     # em outro terminal
+    python -m tools.demo_server            # listens on 127.0.0.1:2121 (demo/demo)
+    python -m launcher                     # in another terminal
 
-Os arquivos são gerados em `demo-server/` (ignorado pelo git). Rode com
-`--bump` para publicar uma "versão nova" dos apps e testar a atualização.
+Files are generated in `demo-server/` (ignored by git). Run with `--bump`
+to publish a "new version" of the apps and test the update flow.
 """
 
 import argparse
@@ -55,7 +55,7 @@ def build_tree(version: str):
     })
     (build / "info.json").write_text(json.dumps({
         "id": "2026-11-02-12345",
-        "description": "Correção do salvamento automático relatada no ticket 12345.",
+        "description": "Fix for the autosave problem reported in ticket 12345.",
         "base_version": version,
         "date": "2026-11-02",
     }, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -78,7 +78,7 @@ def build_tree(version: str):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=2121)
-    parser.add_argument("--bump", action="store_true", help="republica os pacotes como versão nova")
+    parser.add_argument("--bump", action="store_true", help="republish the packages as a new version")
     parser.add_argument("--version", default="1.0")
     args = parser.parse_args()
 
@@ -95,7 +95,7 @@ def main() -> int:
     handler.authorizer = authorizer
     handler.passive_ports = range(60000, 60100)
     server = FTPServer(("127.0.0.1", args.port), handler)
-    print(f"Servidor de demonstração em ftp://demo:demo@127.0.0.1:{args.port} ({ROOT})")
+    print(f"Demo server at ftp://demo:demo@127.0.0.1:{args.port} ({ROOT})")
     server.serve_forever()
     return 0
 

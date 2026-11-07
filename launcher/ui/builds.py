@@ -1,4 +1,4 @@
-"""Central de ajuda e builds personalizadas (entregas por ticket em pastas isoladas)."""
+"""Help centre and custom builds (per-ticket deliveries in isolated folders)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..i18n import tr
 from . import icons, messages, theme
 from .widgets import FramelessDialog, label
 
@@ -43,25 +44,26 @@ class _OptionCard(QFrame):
 
 
 class HelpMenuDialog(FramelessDialog):
-    """Escolha entre reportar um problema e instalar/abrir builds personalizadas."""
+    """Choose between reporting a problem and installing/opening custom builds."""
 
     def __init__(self, app, support_url: str, has_builds: bool, parent=None):
-        super().__init__("Ajuda e suporte", width=420, parent=parent)
+        super().__init__(tr("Help and support"), width=420, parent=parent)
         self.choice = None
-        self.body.addWidget(label("Como podemos ajudar?", "heading"))
+        self.body.addWidget(label(tr("How can we help?"), "heading"))
         self.body.addSpacing(4)
 
         if support_url:
-            self._add("help", "Reportar um problema",
-                      "Abre a página de suporte no navegador.", "report")
+            self._add("help", tr("Report a problem"),
+                      tr("Opens the support page in the browser."), "report")
         cb = app.custom_builds
         if cb is not None:
-            self._add("download", "Instalar build personalizada",
-                      f"Baixa a versão preparada para um {cb.code_label.lower()} específico, "
-                      "sem mexer na instalação oficial.", "install")
+            self._add("download", tr("Install custom build"),
+                      tr("Downloads the version prepared for a specific {label}, "
+                         "without touching the official installation.", label=cb.code_label.lower()),
+                      "install")
             if has_builds:
-                self._add("wrench", "Builds instaladas",
-                          "Abre ou remove as builds personalizadas deste aplicativo.", "manage")
+                self._add("wrench", tr("Installed builds"),
+                          tr("Opens or removes this application's custom builds."), "manage")
 
     def _add(self, icon_name, title, subtitle, choice):
         card = _OptionCard(icon_name, title, subtitle)
@@ -74,14 +76,15 @@ class HelpMenuDialog(FramelessDialog):
 
 
 class BuildCodeDialog(FramelessDialog):
-    """Pede o código (ticket) da build personalizada."""
+    """Asks for the custom build code (ticket)."""
 
     def __init__(self, custom_builds, parent=None):
-        super().__init__("Build personalizada", width=380, parent=parent)
+        super().__init__(tr("Custom build"), width=380, parent=parent)
         self.code = ""
         self._pattern = custom_builds.code_pattern
-        self.body.addWidget(label(f"Código do {custom_builds.code_label.lower()}", "heading"))
-        self.body.addWidget(label(custom_builds.code_hint, "muted", wrap=True))
+        self.body.addWidget(label(tr("{label} code", label=custom_builds.code_label), "heading"))
+        self.body.addWidget(label(custom_builds.code_hint or tr("Enter the code provided by support."),
+                                  "muted", wrap=True))
 
         self.input = QLineEdit()
         self.input.setProperty("role", "code")
@@ -93,9 +96,9 @@ class BuildCodeDialog(FramelessDialog):
         self.body.addWidget(self.input)
 
         row = QHBoxLayout()
-        cancel = QPushButton("Cancelar")
+        cancel = QPushButton(tr("Cancel"))
         cancel.clicked.connect(self.reject)
-        self.btn_ok = QPushButton("Buscar")
+        self.btn_ok = QPushButton(tr("Search"))
         self.btn_ok.setProperty("variant", "primary")
         self.btn_ok.setEnabled(False)
         self.btn_ok.clicked.connect(self._try_accept)
@@ -120,16 +123,16 @@ class BuildCodeDialog(FramelessDialog):
 
 
 class BuildInfoDialog(FramelessDialog):
-    """Mostra os metadados da build encontrada e confirma a instalação."""
+    """Shows the found build's metadata and confirms the installation."""
 
     def __init__(self, app, code: str, info: dict, installed_id: str = "", parent=None):
-        super().__init__("Build personalizada", width=430, parent=parent)
+        super().__init__(tr("Custom build"), width=430, parent=parent)
         cb = app.custom_builds
         self.body.addWidget(label(f"{cb.code_label} {code}", "heading"))
         self.body.addWidget(label(app.name, "muted"))
         self.body.addSpacing(4)
 
-        for caption, key in (("Data", "date"), ("Versão base", "base_version"), ("Identificador", "id")):
+        for caption, key in ((tr("Date"), "date"), (tr("Base version"), "base_version"), (tr("Identifier"), "id")):
             value = str(info.get(key) or "").strip()
             if not value:
                 continue
@@ -140,17 +143,17 @@ class BuildInfoDialog(FramelessDialog):
             row.addWidget(label(value, "value", wrap=True), 1)
             self.body.addLayout(row)
 
-        description = str(info.get("description") or "").strip() or "Sem descrição."
+        description = str(info.get("description") or "").strip() or tr("No description.")
         desc = label(description, "callout", wrap=True)
         self.body.addWidget(desc)
 
         if installed_id:
-            note = (f"Já existe uma build instalada para este código (<i>{installed_id}</i>). "
-                    "Instalar de novo substitui essa pasta.")
+            note = tr("A build is already installed for this code (<i>{id}</i>). "
+                      "Installing again replaces that folder.", id=installed_id)
             role = "callout-warning"
         else:
-            note = ("A build é instalada numa <b>pasta separada</b>, sem afetar a instalação "
-                    "oficial nem outras builds.")
+            note = tr("The build is installed in a <b>separate folder</b>, without affecting "
+                      "the official installation or other builds.")
             role = "callout"
         hint = label(note, role, wrap=True)
         hint.setTextFormat(Qt.TextFormat.RichText)
@@ -158,9 +161,9 @@ class BuildInfoDialog(FramelessDialog):
 
         row = QHBoxLayout()
         row.addStretch()
-        cancel = QPushButton("Cancelar")
+        cancel = QPushButton(tr("Cancel"))
         cancel.clicked.connect(self.reject)
-        install = QPushButton("Instalar")
+        install = QPushButton(tr("Install"))
         install.setProperty("variant", "primary")
         install.setDefault(True)
         install.clicked.connect(self.accept)
@@ -171,28 +174,28 @@ class BuildInfoDialog(FramelessDialog):
 
 
 class InstalledBuildsDialog(FramelessDialog):
-    """Lista as builds instaladas; permite abrir ou remover."""
+    """Lists installed builds; lets you open or remove them."""
 
     def __init__(self, app, builds, on_remove, parent=None):
-        super().__init__("Builds instaladas", width=440, parent=parent)
+        super().__init__(tr("Installed builds"), width=440, parent=parent)
         self.selected = None
         self._app = app
         self._builds = list(builds)
         self._on_remove = on_remove
 
         self.body.addWidget(label(app.name, "heading"))
-        self.body.addWidget(label("Escolha a build que deseja abrir.", "muted"))
+        self.body.addWidget(label(tr("Choose the build you want to open."), "muted"))
         self.list = QListWidget()
         self.list.setMinimumHeight(220)
         self.list.itemDoubleClicked.connect(lambda _item: self._open())
         self.body.addWidget(self.list)
 
         row = QHBoxLayout()
-        self.btn_remove = QPushButton("Remover")
+        self.btn_remove = QPushButton(tr("Remove"))
         self.btn_remove.setProperty("variant", "danger")
         self.btn_remove.setIcon(icons.icon("trash", theme.palette().danger, 16))
         self.btn_remove.clicked.connect(self._remove)
-        self.btn_open = QPushButton("Abrir")
+        self.btn_open = QPushButton(tr("Open"))
         self.btn_open.setProperty("variant", "primary")
         self.btn_open.setIcon(icons.icon("play", theme.palette().on_accent, 14))
         self.btn_open.clicked.connect(self._open)
@@ -204,12 +207,12 @@ class InstalledBuildsDialog(FramelessDialog):
 
     def _populate(self):
         self.list.clear()
-        code_label = self._app.custom_builds.code_label if self._app.custom_builds else "Build"
+        code_label = self._app.custom_builds.code_label if self._app.custom_builds else tr("Build")
         for build in self._builds:
             title = f"{code_label} {build.get('code', '—')}"
             if build.get("date"):
                 title += f"  ·  {build['date']}"
-            subtitle = build.get("description") or "Sem descrição."
+            subtitle = build.get("description") or tr("No description.")
             item = QListWidgetItem(f"{title}\n{subtitle}")
             item.setData(Qt.ItemDataRole.UserRole, build)
             self.list.addItem(item)
@@ -234,10 +237,10 @@ class InstalledBuildsDialog(FramelessDialog):
         if not build:
             return
         if not messages.confirm(
-            self, "Remover build",
-            f"Remover a build <b>{build.get('code', '')}</b>?<br><br>"
-            "Os arquivos dessa pasta serão apagados. As demais builds não são afetadas.",
-            confirm_label="Remover", danger=True,
+            self, tr("Remove build"),
+            tr("Remove build <b>{code}</b>?<br><br>The files in that folder will be deleted. "
+               "Other builds are not affected.", code=build.get("code", "")),
+            confirm_label=tr("Remove"), danger=True,
         ):
             return
         if not self._on_remove(build):

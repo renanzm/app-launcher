@@ -1,8 +1,8 @@
-"""Leitura e validação do `launcher_config.json`.
+"""Reading and validating `launcher_config.json`.
 
-Tudo o que é específico de um ambiente (servidor, aplicativos, opções que
-viram variáveis de ambiente, downloads avulsos, login) vive no arquivo de
-configuração. O código do launcher não conhece nenhum produto em particular.
+Everything environment-specific (server, applications, options that become
+environment variables, standalone downloads, login) lives in the configuration
+file. The launcher code knows no particular product.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .i18n import tr
+
 CONFIG_FILE_NAME = "launcher_config.json"
 EXAMPLE_CONFIG_FILE_NAME = "launcher_config.example.json"
 
@@ -20,7 +22,7 @@ _SLUG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 class ConfigError(ValueError):
-    """Configuração ausente ou inválida."""
+    """Missing or invalid configuration."""
 
 
 @dataclass(frozen=True)
@@ -41,8 +43,8 @@ class ServerConfig:
 class AuthConfig:
     type: str = "none"               # "none" | "http"
     url: str = ""
-    title: str = "Entrar"
-    user_label: str = "Usuário"
+    title: str = ""                  # empty -> translated default ("Sign in")
+    user_label: str = ""             # empty -> translated default ("Username")
     success_contains: str = ""       # texto que precisa constar na resposta
     session_env_user: str = ""       # variável que recebe o usuário logado
     session_env_password: str = ""   # variável que recebe a senha da sessão
@@ -74,7 +76,7 @@ class CustomBuildsConfig:
     remote_subdir: str = "custom-builds"
     code_label: str = "Ticket"
     code_pattern: str = r"^\d{4,10}$"
-    code_hint: str = "Informe o código fornecido pelo suporte."
+    code_hint: str = ""              # empty -> translated default
     package_names: tuple = ("build.zip", "dist.zip")
     carry_over_files: tuple = ()     # copiados da instalação oficial
 
@@ -126,6 +128,7 @@ class LauncherConfig:
     support_url: str = ""
     downloads: tuple = ()
     self_update: SelfUpdateConfig | None = None
+    language: str = ""              # "" / "auto" follows the system
     source: Path | None = None
     is_example: bool = False
 
@@ -140,7 +143,7 @@ class LauncherConfig:
 def _require(data: dict, key: str, where: str):
     value = data.get(key)
     if value in (None, ""):
-        raise ConfigError(f"{where}: campo obrigatório '{key}' ausente.")
+        raise ConfigError(tr("{where}: required field '{key}' is missing.", where=where, key=key))
     return value
 
 
@@ -152,9 +155,9 @@ def _str(data: dict, key: str, default: str = "") -> str:
 def _parse_server(data: dict) -> ServerConfig:
     protocol = _str(data, "protocol", "ftp").lower()
     if protocol not in ("ftp", "ftps"):
-        raise ConfigError("server.protocol deve ser 'ftp' ou 'ftps'.")
+        raise ConfigError(tr("server.protocol must be 'ftp' or 'ftps'."))
     if not data.get("host") and not data.get("credentials_url"):
-        raise ConfigError("server: informe 'host' ou 'credentials_url'.")
+        raise ConfigError(tr("server: set 'host' or 'credentials_url'."))
     return ServerConfig(
         protocol=protocol,
         host=_str(data, "host"),
@@ -174,15 +177,15 @@ def _parse_auth(data: dict | None) -> AuthConfig:
         return AuthConfig()
     kind = _str(data, "type", "none").lower()
     if kind not in ("none", "http"):
-        raise ConfigError("auth.type deve ser 'none' ou 'http'.")
+        raise ConfigError(tr("auth.type must be 'none' or 'http'."))
     if kind == "http":
         _require(data, "url", "auth")
     session_env = data.get("session_env") or {}
     return AuthConfig(
         type=kind,
         url=_str(data, "url"),
-        title=_str(data, "title", "Entrar"),
-        user_label=_str(data, "user_label", "Usuário"),
+        title=_str(data, "title"),
+        user_label=_str(data, "user_label"),
         success_contains=_str(data, "success_contains"),
         session_env_user=_str(session_env, "user"),
         session_env_password=_str(session_env, "password"),
@@ -193,7 +196,7 @@ def _parse_auth(data: dict | None) -> AuthConfig:
 def _parse_option(data: dict, where: str) -> AppOption:
     kind = _str(data, "type", "bool").lower()
     if kind not in ("bool", "text", "password"):
-        raise ConfigError(f"{where}: type deve ser 'bool', 'text' ou 'password'.")
+        raise ConfigError(tr("{where}: type must be 'bool', 'text' or 'password'.", where=where))
     default = data.get("default")
     if default is None:
         default = False if kind == "bool" else ""
@@ -214,7 +217,7 @@ def _parse_custom_builds(data: dict | None) -> CustomBuildsConfig | None:
     try:
         re.compile(pattern)
     except re.error as exc:
-        raise ConfigError(f"custom_builds.code_pattern inválido: {exc}") from None
+        raise ConfigError(tr("custom_builds.code_pattern is invalid: {error}", error=exc)) from None
     names = tuple(data.get("package_names") or CustomBuildsConfig.package_names)
     return CustomBuildsConfig(
         remote_subdir=_str(data, "remote_subdir", "custom-builds"),
@@ -230,14 +233,15 @@ def _parse_app(data: dict, index: int) -> AppConfig:
     where = f"apps[{index}]"
     app_id = _require(data, "id", where)
     if not _SLUG.match(app_id):
-        raise ConfigError(f"{where}: id '{app_id}' deve conter apenas letras, números, '-', '_' ou '.'.")
+        raise ConfigError(tr("{where}: id '{id}' may only contain letters, digits, '-', '_' or '.'.",
+                             where=where, id=app_id))
     options = tuple(
         _parse_option(o, f"{where}.options[{i}]")
         for i, o in enumerate(data.get("options") or [])
     )
     keys = [o.key for o in options]
     if len(keys) != len(set(keys)):
-        raise ConfigError(f"{where}: chaves de options repetidas.")
+        raise ConfigError(tr("{where}: duplicate option keys.", where=where))
     actions = tuple(
         ExtraAction(
             label=_require(a, "label", f"{where}.extra_actions[{i}]"),
@@ -282,18 +286,18 @@ def _parse_download_tab(data: dict, index: int) -> DownloadTab:
 def parse_config(data: dict, source: Path | None = None,
                  is_example: bool = False) -> LauncherConfig:
     if not isinstance(data, dict):
-        raise ConfigError("O arquivo de configuração deve conter um objeto JSON.")
+        raise ConfigError(tr("The configuration file must contain a JSON object."))
 
     apps = tuple(_parse_app(a, i) for i, a in enumerate(data.get("apps") or []))
     if not apps:
-        raise ConfigError("Configure ao menos um aplicativo em 'apps'.")
+        raise ConfigError(tr("Configure at least one application in 'apps'."))
     ids = [a.id for a in apps]
     if len(ids) != len(set(ids)):
-        raise ConfigError("Há aplicativos com o mesmo 'id'.")
+        raise ConfigError(tr("Some applications share the same 'id'."))
 
     accent = _str(data, "accent_color", "#7C5CFF")
     if not _HEX_COLOR.match(accent):
-        raise ConfigError("accent_color deve estar no formato #RRGGBB.")
+        raise ConfigError(tr("accent_color must be in the #RRGGBB format."))
 
     app_name = _str(data, "app_name", "App Launcher")
     app_id = _str(data, "app_id") or re.sub(r"[^A-Za-z0-9]+", "", app_name) or "AppLauncher"
@@ -318,6 +322,7 @@ def parse_config(data: dict, source: Path | None = None,
             _parse_download_tab(t, i) for i, t in enumerate(data.get("downloads") or [])
         ),
         self_update=self_update,
+        language=_str(data, "language"),
         source=source,
         is_example=is_example,
     )
@@ -327,18 +332,19 @@ def load_config(path: Path, is_example: bool = False) -> LauncherConfig:
     try:
         raw = Path(path).read_text(encoding="utf-8-sig")
     except OSError as exc:
-        raise ConfigError(f"Não foi possível ler {path}: {exc}") from None
+        raise ConfigError(tr("Could not read {path}: {error}", path=path, error=exc)) from None
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as exc:
         raise ConfigError(
-            f"JSON inválido em {Path(path).name} (linha {exc.lineno}, coluna {exc.colno}): {exc.msg}"
+            tr("Invalid JSON in {name} (line {line}, column {column}): {error}",
+               name=Path(path).name, line=exc.lineno, column=exc.colno, error=exc.msg)
         ) from None
     return parse_config(data, source=Path(path), is_example=is_example)
 
 
 def find_config(base_dir: Path, bundled_dir: Path, explicit: Path | None = None) -> LauncherConfig:
-    """Localiza a configuração: --config > pasta do launcher > exemplo embutido."""
+    """Locates the configuration: --config > launcher folder > bundled example."""
     if explicit is not None:
         return load_config(explicit)
     local = Path(base_dir) / CONFIG_FILE_NAME
@@ -347,6 +353,4 @@ def find_config(base_dir: Path, bundled_dir: Path, explicit: Path | None = None)
     example = Path(bundled_dir) / EXAMPLE_CONFIG_FILE_NAME
     if example.is_file():
         return load_config(example, is_example=True)
-    raise ConfigError(
-        f"Arquivo '{CONFIG_FILE_NAME}' não encontrado em {base_dir}."
-    )
+    raise ConfigError(tr("File '{name}' not found in {folder}.", name=CONFIG_FILE_NAME, folder=base_dir))

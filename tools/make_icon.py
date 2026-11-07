@@ -1,6 +1,6 @@
-"""Gera `assets/app.ico` (multi-resolução) a partir da marca desenhada em código.
+"""Generates `assets/app.ico` (multi-resolution) from the mark drawn in code.
 
-Uso: python -m tools.make_icon [--accent #7C5CFF]
+Usage: python -m tools.make_icon [--accent #7C5CFF]
 """
 
 import argparse
@@ -54,7 +54,7 @@ def main() -> int:
     images = {s: render_png(s, args.accent) for s in SIZES}
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_bytes(build_ico(images))
-    print(f"Ícone gravado em {args.out}")
+    print(f"Icon written to {args.out}")
     return 0
 
 

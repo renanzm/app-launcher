@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import crypto
 from .config import ServerConfig
+from .i18n import language, tr
 
 _CACHE_KEY = "server_credentials"
 
@@ -54,7 +55,7 @@ class RemoteFile:
 def _password_from(data: dict, secret: str) -> str:
     if data.get("password_enc"):
         if not secret:
-            raise CredentialsError("password_enc informado, mas server.secret está vazio.")
+            raise CredentialsError(tr("password_enc is set, but server.secret is empty."))
         return crypto.decrypt(data["password_enc"], secret)
     return str(data.get("password") or "")
 
@@ -70,7 +71,7 @@ def _fetch_remote_credentials(url: str, timeout: int = 5) -> dict:
     response.raise_for_status()
     data = response.json()
     if not isinstance(data, dict) or not data.get("host"):
-        raise ValueError("JSON de credenciais sem 'host'.")
+        raise ValueError(tr("Credentials JSON has no 'host'."))
     return data
 
 
@@ -106,8 +107,8 @@ def resolve_credentials(server: ServerConfig, store=None, fetch=_fetch_remote_cr
             except (TypeError, ValueError):
                 pass
         raise CredentialsError(
-            "Não foi possível obter as credenciais do servidor e não há "
-            "credenciais salvas nesta máquina. Verifique a conexão com a internet."
+            tr("Could not get the server credentials and there are no saved "
+               "credentials on this machine. Check your internet connection.")
         ) from None
 
     if store is not None:
@@ -169,7 +170,7 @@ def read_text(ftp, name: str, max_bytes: int = 1_000_000) -> str | None:
     def collect(chunk):
         buf.extend(chunk)
         if len(buf) > max_bytes:
-            raise ValueError(f"{name} excede {max_bytes} bytes")
+            raise ValueError(tr("{name} exceeds {max} bytes", name=name, max=max_bytes))
 
     try:
         ftp.retrbinary(f"RETR {name}", collect)
@@ -220,7 +221,7 @@ def download(ftp, name: str, target: Path, expected_size: int | None = None,
                 f"Download incompleto de {name}: {done} de {expected_size} bytes."
             )
         if expected_hash and digest.hexdigest() != expected_hash:
-            raise IntegrityError(f"O SHA-256 de {name} não confere com o publicado no servidor.")
+            raise IntegrityError(tr("The SHA-256 of {name} does not match the one published on the server.", name=name))
         partial.replace(target)
     except BaseException:
         partial.unlink(missing_ok=True)
@@ -285,12 +286,12 @@ def file_info(ftp, directory: str, name: str) -> RemoteFile:
 
 
 def format_mdtm(mdtm: str | None) -> str:
-    """MDTM (UTC, YYYYMMDDHHMMSS[.fff]) → 'dd/mm/aaaa hh:mm' no fuso local."""
+    """MDTM (UTC, YYYYMMDDHHMMSS[.fff]) -> local time: 'YYYY-MM-DD hh:mm' (en) or 'dd/mm/yyyy hh:mm' (pt-BR)."""
     if not mdtm:
         return "—"
     try:
         dt = datetime.strptime(mdtm[:14], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
-        return dt.astimezone().strftime("%d/%m/%Y %H:%M")
+        return dt.astimezone().strftime("%d/%m/%Y %H:%M" if language() == "pt-BR" else "%Y-%m-%d %H:%M")
     except ValueError:
         return mdtm
 

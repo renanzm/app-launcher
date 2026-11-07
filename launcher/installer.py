@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .config import AppConfig
+from .i18n import tr
 
 # Metadados gravados dentro da pasta de cada build personalizada.
 BUILD_META_FILE = ".launcher-build.json"
@@ -33,10 +34,10 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path, on_progress=None):
             parts = Path(normalized).parts
             if (not normalized or normalized.startswith("/") or ".." in parts
                     or re.match(r"^[A-Za-z]:", normalized)):
-                raise ValueError(f"Entrada insegura no zip: {member.filename}")
+                raise ValueError(tr("Unsafe zip entry: {name}", name=member.filename))
             target = (dest_dir / normalized).resolve()
             if not target.is_relative_to(dest_dir):
-                raise ValueError(f"Entrada insegura no zip (fora do destino): {member.filename}")
+                raise ValueError(tr("Unsafe zip entry (outside the destination): {name}", name=member.filename))
             if member.is_dir():
                 target.mkdir(parents=True, exist_ok=True)
             else:
@@ -194,5 +195,5 @@ def build_launch_env(app: AppConfig, option_values: dict, session: dict | None =
 def launch(executable: Path, env: dict) -> subprocess.Popen:
     executable = Path(executable)
     if not executable.is_file():
-        raise FileNotFoundError(f"Executável não encontrado: {executable}")
+        raise FileNotFoundError(tr("Executable not found: {name}", name=executable))
     return subprocess.Popen([str(executable)], cwd=str(executable.parent), env=env)

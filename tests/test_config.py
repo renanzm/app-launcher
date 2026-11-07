@@ -61,7 +61,7 @@ class ParseConfigTests(unittest.TestCase):
             path.write_text("{ invalid", encoding="utf-8")
             with self.assertRaises(ConfigError) as ctx:
                 load_config(path)
-            self.assertIn("linha 1", str(ctx.exception))
+            self.assertIn("line 1", str(ctx.exception))
 
 
 class FindConfigTests(unittest.TestCase):

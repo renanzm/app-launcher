@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from ..i18n import tr
 from . import icons, theme
 
 _SHADOW_MARGIN = 14
@@ -110,7 +111,7 @@ class _FramelessMixin:
         card_layout.addLayout(self.body)
 
         if closable:
-            close = icon_button("close", "Fechar", "CloseButton", 16)
+            close = icon_button("close", tr("Close"), "CloseButton", 16)
             close.clicked.connect(self.close)
             self.title_bar.add_button(close)
             self.close_button = close

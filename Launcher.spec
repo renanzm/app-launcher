@@ -9,7 +9,7 @@ a = Analysis(
         ('assets/app.ico', 'assets'),
         ('launcher_config.example.json', '.'),
     ],
-    hiddenimports=[],
+    hiddenimports=['launcher.locales.pt_br'],  # loaded by name in launcher.i18n
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

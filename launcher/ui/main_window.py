@@ -1,4 +1,4 @@
-"""Janela principal: seleção do aplicativo, versões, atualização e execução."""
+"""Main window: app selection, versions, updating and launching."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import __version__, auth, installer, remote, self_update
+from ..i18n import tr
 from . import icons, messages, theme
 from .builds import BuildCodeDialog, BuildInfoDialog, HelpMenuDialog, InstalledBuildsDialog
 from .downloads import DownloadsDialog
@@ -43,11 +44,11 @@ class MainWindow(FramelessWindow):
         pal = theme.palette()
 
         # -- barra de título ----------------------------------------------
-        self.btn_help = icon_button("help", "Ajuda e suporte")
-        self.btn_downloads = icon_button("box", "Downloads")
-        self.btn_settings = icon_button("settings", "Configurações")
-        btn_min = icon_button("minimize", "Minimizar", size=16)
-        btn_close = icon_button("close", "Fechar", "CloseButton", 16)
+        self.btn_help = icon_button("help", tr("Help and support"))
+        self.btn_downloads = icon_button("box", tr("Downloads"))
+        self.btn_settings = icon_button("settings", tr("Settings"))
+        btn_min = icon_button("minimize", tr("Minimize"), size=16)
+        btn_close = icon_button("close", tr("Close"), "CloseButton", 16)
         for b in (self.btn_help, self.btn_downloads, self.btn_settings, btn_min, btn_close):
             self.title_bar.add_button(b)
         btn_min.clicked.connect(self.showMinimized)
@@ -58,7 +59,7 @@ class MainWindow(FramelessWindow):
         self.btn_downloads.setVisible(bool(config.downloads))
 
         # -- seletor de aplicativo -------------------------------------------
-        self.body.addWidget(label("APLICATIVO", "overline"))
+        self.body.addWidget(label(tr("APPLICATION"), "overline"))
         self.combo = QComboBox()
         self.combo.setIconSize(QSize(28, 28))
         self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -71,8 +72,8 @@ class MainWindow(FramelessWindow):
         # -- versões ---------------------------------------------------------
         tiles = QHBoxLayout()
         tiles.setSpacing(10)
-        self.tile_local = VersionTile("Instalado")
-        self.tile_remote = VersionTile("Disponível")
+        self.tile_local = VersionTile(tr("Installed"))
+        self.tile_remote = VersionTile(tr("Available"))
         tiles.addWidget(self.tile_local)
         tiles.addWidget(self.tile_remote)
         self.body.addSpacing(4)
@@ -108,14 +109,14 @@ class MainWindow(FramelessWindow):
 
         update_row = QHBoxLayout()
         update_row.setSpacing(0)
-        self.btn_update = QPushButton("Verificar atualizações")
+        self.btn_update = QPushButton(tr("Check for updates"))
         self.btn_update.setProperty("segment", "left")
         self.btn_update.setIcon(icons.icon("refresh", pal.muted, 16, disabled_color=pal.faint))
         self.btn_update.clicked.connect(self._on_update_clicked)
         self.btn_more = QPushButton()
         self.btn_more.setProperty("segment", "right")
         self.btn_more.setIcon(icons.icon("more", pal.muted, 16, disabled_color=pal.faint))
-        self.btn_more.setToolTip("Mais opções")
+        self.btn_more.setToolTip(tr("More options"))
         self.btn_more.clicked.connect(self._show_more_menu)
         update_row.addWidget(self.btn_update, 1)
         update_row.addWidget(self.btn_more)
@@ -168,31 +169,31 @@ class MainWindow(FramelessWindow):
         self._update_tiles(record[0] if record else None,
                            (self._remote.get(app.id) or remote.RemoteFile("", None, None)).mdtm)
 
-        self.btn_open.setText(f"Abrir {app.name}")
+        self.btn_open.setText(tr("Open {name}", name=app.name))
         self._rebuild_extra_buttons()
         builds = installer.list_builds(self.base_dir, app) if app.custom_builds else []
-        self.btn_builds.setText(f"Builds personalizadas ({len(builds)})")
+        self.btn_builds.setText(tr("Custom builds ({count})", count=len(builds)))
         self.btn_builds.setVisible(bool(builds))
         self.btn_help.setVisible(bool(self.config.support_url or app.custom_builds))
 
         if self._pending is not None:
-            self.btn_update.setText("Instalar atualização" if installed else "Instalar")
+            self.btn_update.setText(tr("Install update") if installed else tr("Install"))
             self.btn_update.setIcon(icons.icon("download", theme.palette().on_accent, 16,
                                                disabled_color=theme.palette().faint))
             theme.set_role(self.btn_update, "variant", "primary")
         else:
-            self.btn_update.setText("Verificar atualizações")
+            self.btn_update.setText(tr("Check for updates"))
             self.btn_update.setIcon(icons.icon("refresh", theme.palette().muted, 16,
                                                disabled_color=theme.palette().faint))
             theme.set_role(self.btn_update, "variant", "")
 
         if status is None:
             if not installed:
-                status = "Não instalado. Use “Verificar atualizações” para instalar."
+                status = tr("Not installed. Use “Check for updates” to install.")
             elif record:
-                status = f"Pronto · atualizado em {remote.format_mdtm(record[0])}"
+                status = tr("Ready · updated on {date}", date=remote.format_mdtm(record[0]))
             else:
-                status = "Pronto."
+                status = tr("Ready.")
         self.status.setText(status)
         self.footer.setText(self._footer_text())
         self._apply_enabled()
@@ -201,9 +202,9 @@ class MainWindow(FramelessWindow):
     def _footer_text(self) -> str:
         parts = [f"v{__version__}"]
         if self._session_user:
-            parts.append(f"Conectado como {self._session_user}")
+            parts.append(tr("Signed in as {user}", user=self._session_user))
         if self.config.is_example:
-            parts.append("usando a configuração de exemplo")
+            parts.append(tr("using the example configuration"))
         return " · ".join(parts)
 
     def _update_tiles(self, local_mdtm, remote_mdtm):
@@ -263,11 +264,11 @@ class MainWindow(FramelessWindow):
 
     def _check_updates(self, auto: bool = False):
         app = self.app
-        self._set_busy(True, "Conectando ao servidor…")
+        self._set_busy(True, tr("Connecting to the server…"))
 
         def work(ctx):
             with self.server.connect() as ftp:
-                ctx.status("Consultando a versão publicada…")
+                ctx.status(tr("Checking the published version…"))
                 ftp.cwd(app.remote_dir)
                 return remote.stat(ftp, app.package)
 
@@ -279,32 +280,33 @@ class MainWindow(FramelessWindow):
             if installed and record and record == (rf.mdtm, rf.size):
                 self._pending = None
                 self.progress.setValue(100)
-                self._refresh("Tudo certo · você já tem a versão mais recente.")
+                self._refresh(tr("All good · you already have the latest version."))
                 return
             if auto and not installed:
                 self._refresh()
                 return
             self._pending = rf
-            self._refresh(f"Nova versão disponível · {remote.format_mdtm(rf.mdtm)}"
-                          if installed else f"Versão disponível · {remote.format_mdtm(rf.mdtm)}")
+            date = remote.format_mdtm(rf.mdtm)
+            self._refresh(tr("New version available · {date}", date=date) if installed
+                          else tr("Version available · {date}", date=date))
             if auto:
                 self._install(rf, auto=True)
 
         Task.start_new(self, work, done,
-                       lambda exc: self._fail("Verificar atualizações", exc, quiet=auto),
+                       lambda exc: self._fail(tr("Check for updates"), exc, quiet=auto),
                        on_status=self.status.setText)
 
     def _install(self, rf: remote.RemoteFile, auto: bool = False):
         app = self.app
         target = self._install_dir()
         temp_zip = self.base_dir / _TEMP_DIR_NAME / f"{app.id}.zip"
-        self._set_busy(True, "Baixando…")
+        self._set_busy(True, tr("Downloading…"))
 
         def work(ctx):
             with self.server.connect() as ftp:
                 ftp.cwd(app.remote_dir)
                 remote.download(ftp, rf.name, temp_zip, rf.size, on_progress=ctx.progress)
-            ctx.status("Instalando…")
+            ctx.status(tr("Installing…"))
             ctx.progress(0)
             try:
                 installer.install_package(temp_zip, target, on_progress=ctx.progress)
@@ -317,12 +319,12 @@ class MainWindow(FramelessWindow):
             self._pending = None
             self._set_busy(False)
             self.progress.setValue(100)
-            self._refresh(f"Atualizado · versão de {remote.format_mdtm(rf.mdtm)}")
+            self._refresh(tr("Updated · version from {date}", date=remote.format_mdtm(rf.mdtm)))
             if not auto:
-                messages.success(self, "Instalação concluída",
-                                 f"<b>{app.name}</b> está pronto para uso.")
+                messages.success(self, tr("Installation complete"),
+                                 tr("<b>{name}</b> is ready to use.", name=app.name))
 
-        Task.start_new(self, work, done, lambda exc: self._fail("Instalar", exc, quiet=auto),
+        Task.start_new(self, work, done, lambda exc: self._fail(tr("Install"), exc, quiet=auto),
                        on_progress=self.progress.setValue, on_status=self.status.setText)
 
     # ------------------------------------------------------------------
@@ -337,11 +339,11 @@ class MainWindow(FramelessWindow):
                             | Qt.WindowType.NoDropShadowWindowHint)
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         installed_dir = self._install_dir().is_dir()
-        act_integrity = menu.addAction(icons.icon("shield", pal.muted, 16), "Verificar integridade")
-        act_folder = menu.addAction(icons.icon("folder", pal.muted, 16), "Abrir pasta de instalação")
+        act_integrity = menu.addAction(icons.icon("shield", pal.muted, 16), tr("Verify integrity"))
+        act_folder = menu.addAction(icons.icon("folder", pal.muted, 16), tr("Open install folder"))
         act_folder.setEnabled(installed_dir)
         menu.addSeparator()
-        act_uninstall = menu.addAction(icons.icon("trash", pal.danger, 16), "Desinstalar")
+        act_uninstall = menu.addAction(icons.icon("trash", pal.danger, 16), tr("Uninstall"))
         act_uninstall.setEnabled(installed_dir)
         chosen = menu.exec(self.btn_more.mapToGlobal(self.btn_more.rect().bottomLeft()))
         if chosen is act_integrity:
@@ -366,36 +368,38 @@ class MainWindow(FramelessWindow):
                     f"<span style='color:{pal.muted}'>{detail}</span>")
 
         rows = [
-            line(folder.is_dir(), "Pasta de instalação", "encontrada" if folder.is_dir() else "não encontrada"),
-            line(exe.is_file(), f"Executável <i>{app.executable}</i>",
-                 "encontrado" if exe.is_file() else "não encontrado"),
-            line(record is not None, "Registro da versão",
-                 remote.format_mdtm(record[0]) if record else "ausente"),
-            f"&nbsp;&nbsp;&nbsp; Arquivos na pasta: <b>{installer.count_files(folder)}</b>",
+            line(folder.is_dir(), tr("Install folder"),
+                 tr("found") if folder.is_dir() else tr("not found")),
+            line(exe.is_file(), tr("Executable <i>{name}</i>", name=app.executable),
+                 tr("found") if exe.is_file() else tr("not found")),
+            line(record is not None, tr("Version record"),
+                 remote.format_mdtm(record[0]) if record else tr("missing")),
+            "&nbsp;&nbsp;&nbsp; " + tr("Files in folder: <b>{count}</b>", count=installer.count_files(folder)),
         ]
         if app.custom_builds:
-            rows.append(f"&nbsp;&nbsp;&nbsp; Builds personalizadas: <b>{len(builds)}</b>")
-        messages.info(self, "Verificação de integridade", f"<b>{app.name}</b><br><br>" + "<br>".join(rows))
+            rows.append("&nbsp;&nbsp;&nbsp; " + tr("Custom builds: <b>{count}</b>", count=len(builds)))
+        messages.info(self, tr("Integrity check"), f"<b>{app.name}</b><br><br>" + "<br>".join(rows))
 
     def _uninstall(self):
         app = self.app
         folder = self._install_dir()
         if not messages.confirm(
-            self, "Desinstalar",
-            f"Desinstalar <b>{app.name}</b>?<br><br>Todos os arquivos em<br><i>{messages.path_html(folder)}</i><br>"
-            "serão apagados. Builds personalizadas não são afetadas.",
-            confirm_label="Desinstalar", danger=True,
+            self, tr("Uninstall"),
+            tr("Uninstall <b>{name}</b>?<br><br>All files in<br><i>{path}</i><br>will be deleted. "
+               "Custom builds are not affected.", name=app.name, path=messages.path_html(folder)),
+            confirm_label=tr("Uninstall"), danger=True,
         ):
             return
         try:
             shutil.rmtree(folder)
         except OSError as exc:
-            messages.error(self, "Desinstalar", f"Não foi possível remover os arquivos:<br>{messages.describe(exc)}")
+            messages.error(self, tr("Uninstall"),
+                           tr("Could not remove the files:<br>{error}", error=messages.describe(exc)))
             return
         self.store.clear_install_record(app.id)
         self._pending = None
         self.progress.setValue(0)
-        self._refresh(f"{app.name} foi desinstalado.")
+        self._refresh(tr("{name} was uninstalled.", name=app.name))
 
     # ------------------------------------------------------------------
     # Execução
@@ -412,10 +416,10 @@ class MainWindow(FramelessWindow):
         try:
             installer.launch(path, self._launch_env())
         except Exception as exc:  # noqa: BLE001
-            messages.error(self, "Abrir aplicativo", messages.describe(exc))
+            messages.error(self, tr("Open application"), messages.describe(exc))
             return
         if self.store.pref("keep_open", False):
-            self.status.setText(f"{self.app.name} iniciado.")
+            self.status.setText(tr("{name} started.", name=self.app.name))
         else:
             self.close()
 
@@ -457,7 +461,7 @@ class MainWindow(FramelessWindow):
         if not dlg.exec():
             return
         code = dlg.code
-        self._set_busy(True, f"Procurando a build {code}…")
+        self._set_busy(True, tr("Looking for build {code}…", code=code))
 
         def work(ctx):
             with self.server.connect() as ftp:
@@ -475,16 +479,16 @@ class MainWindow(FramelessWindow):
             self._set_busy(False)
             self._refresh()
             if result is None:
-                messages.info(self, "Build personalizada",
-                              f"Nenhuma build encontrada para <b>{cb.code_label} {code}</b>.<br><br>"
-                              "Confira o código e tente de novo.")
+                messages.info(self, tr("Custom build"),
+                              tr("No build found for <b>{label} {code}</b>.<br><br>"
+                                 "Check the code and try again.", label=cb.code_label, code=code))
                 return
             info, rf = result
             existing = installer.read_build_meta(installer.build_dir(self.base_dir, app, code)) or {}
             if BuildInfoDialog(app, code, info, existing.get("id", ""), self).exec():
                 self._install_build(code, info, rf)
 
-        Task.start_new(self, work, done, lambda exc: self._fail("Build personalizada", exc),
+        Task.start_new(self, work, done, lambda exc: self._fail(tr("Custom build"), exc),
                        on_status=self.status.setText)
 
     def _install_build(self, code: str, info: dict, rf: remote.RemoteFile):
@@ -493,13 +497,13 @@ class MainWindow(FramelessWindow):
         target = installer.build_dir(self.base_dir, app, code)
         official = self._install_dir() if self._install_dir().is_dir() else None
         temp_zip = self.base_dir / _TEMP_DIR_NAME / f"{app.id}-build-{code}.zip"
-        self._set_busy(True, f"Baixando a build {code}…")
+        self._set_busy(True, tr("Downloading build {code}…", code=code))
 
         def work(ctx):
             with self.server.connect() as ftp:
                 ftp.cwd(f"{app.remote_dir.rstrip('/')}/{cb.remote_subdir}/{code}")
                 remote.download(ftp, rf.name, temp_zip, rf.size, on_progress=ctx.progress)
-            ctx.status("Instalando…")
+            ctx.status(tr("Installing…"))
             ctx.progress(0)
             try:
                 installer.install_package(temp_zip, target, clean=True, on_progress=ctx.progress)
@@ -512,15 +516,16 @@ class MainWindow(FramelessWindow):
         def done(copied):
             self._set_busy(False)
             self.progress.setValue(100)
-            self._refresh(f"Build {code} instalada.")
+            self._refresh(tr("Build {code} installed.", code=code))
             note = ""
             if copied:
-                note = "<br><br>Copiado da instalação oficial: " + ", ".join(f"<b>{c}</b>" for c in copied)
-            messages.success(self, "Build instalada",
-                             f"A build <b>{code}</b> foi instalada numa pasta separada.<br>"
-                             f"Abra-a em <b>Builds personalizadas</b>.{note}")
+                note = "<br><br>" + tr("Copied from the official installation: {files}",
+                                       files=", ".join(f"<b>{c}</b>" for c in copied))
+            messages.success(self, tr("Build installed"),
+                             tr("Build <b>{code}</b> was installed in a separate folder.<br>"
+                                "Open it from <b>Custom builds</b>.", code=code) + note)
 
-        Task.start_new(self, work, done, lambda exc: self._fail("Build personalizada", exc),
+        Task.start_new(self, work, done, lambda exc: self._fail(tr("Custom build"), exc),
                        on_progress=self.progress.setValue, on_status=self.status.setText)
 
     def _open_installed_builds(self):
@@ -535,7 +540,7 @@ class MainWindow(FramelessWindow):
                 shutil.rmtree(build["folder"])
                 return True
             except OSError as exc:
-                messages.error(self, "Remover build", messages.describe(exc))
+                messages.error(self, tr("Remove build"), messages.describe(exc))
                 return False
 
         dlg = InstalledBuildsDialog(app, builds, remove, self)
@@ -551,11 +556,11 @@ class MainWindow(FramelessWindow):
     def _startup_checks(self):
         if self._self_update_failed:
             messages.warning(
-                self, "Atualização do launcher",
-                "A nova versão foi baixada, mas o executável não pôde ser substituído.<br><br>"
-                "Isso costuma acontecer com outra janela do launcher aberta, antivírus "
-                "bloqueando a troca ou pasta sem permissão de escrita. Feche as outras "
-                "instâncias e abra o launcher de novo.",
+                self, tr("Launcher update"),
+                tr("The new version was downloaded, but the executable could not be replaced.<br><br>"
+                   "This usually happens when another launcher window is open, an antivirus "
+                   "blocks the swap, or the folder is not writable. Close the other "
+                   "instances and open the launcher again."),
             )
             self._auto_update_app()
         elif self.config.self_update and self_update.is_frozen():
@@ -592,10 +597,10 @@ class MainWindow(FramelessWindow):
                 self._auto_update_app()
                 return
             if not self.store.pref("auto_update_launcher", False) and not messages.confirm(
-                self, "Atualização do launcher",
-                f"Há uma nova versão do launcher (publicada em <b>{remote.format_mdtm(rf.mdtm)}</b>)."
-                "<br><br>Atualizar agora? O launcher será reiniciado.",
-                confirm_label="Atualizar", cancel_label="Agora não",
+                self, tr("Launcher update"),
+                tr("A new launcher version is available (published on <b>{date}</b>)."
+                   "<br><br>Update now? The launcher will restart.", date=remote.format_mdtm(rf.mdtm)),
+                confirm_label=tr("Update"), cancel_label=tr("Not now"),
             ):
                 self._auto_update_app()
                 return
@@ -608,7 +613,7 @@ class MainWindow(FramelessWindow):
         exe = Path(sys.executable)
         new_exe = exe.with_name(f"{exe.stem}.new.exe")
         self._self_updating = True
-        self._set_busy(True, "Baixando a nova versão do launcher…")
+        self._set_busy(True, tr("Downloading the new launcher version…"))
 
         def work(ctx):
             with self.server.connect() as ftp:
@@ -616,21 +621,21 @@ class MainWindow(FramelessWindow):
                 remote.download(ftp, su.file_name, new_exe, rf.size, on_progress=ctx.progress)
 
         def done(_):
-            self.status.setText("Reiniciando para aplicar a atualização…")
+            self.status.setText(tr("Restarting to apply the update…"))
             self_update.apply(new_exe, rf.mdtm, rf.size)
             QApplication.instance().quit()
 
         def fail(exc):
             self._self_updating = False
-            self._fail("Atualização do launcher", exc)
+            self._fail(tr("Launcher update"), exc)
 
         Task.start_new(self, work, done, fail, on_progress=self.progress.setValue)
 
     def closeEvent(self, event):
         if self._busy and not messages.confirm(
-            self, "Operação em andamento",
-            "Há um download ou instalação em andamento. Fechar mesmo assim?",
-            confirm_label="Fechar", danger=True,
+            self, tr("Operation in progress"),
+            tr("A download or installation is in progress. Close anyway?"),
+            confirm_label=tr("Close"), danger=True,
         ):
             event.ignore()
             return

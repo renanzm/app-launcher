@@ -8,6 +8,7 @@ from PyQt6.QtCore import QEasingCurve, QEventLoop, QPropertyAnimation, QRectF, Q
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QWidget
 
+from ..i18n import tr
 from . import icons, theme
 
 MIN_DURATION_MS = 1200
@@ -15,12 +16,12 @@ FADE_MS = 220
 
 
 class Splash(QWidget):
-    def __init__(self, app_name: str, subtitle: str = "Carregando…"):
+    def __init__(self, app_name: str, subtitle: str | None = None):
         super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                          | Qt.WindowType.SplashScreen)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self._name = app_name
-        self._subtitle = subtitle
+        self._subtitle = subtitle or tr("Loading…")
         self._phase = 0.0
         self.setFixedSize(340, 200)
         self._timer = QTimer(self)

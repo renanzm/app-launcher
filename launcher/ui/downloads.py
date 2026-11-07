@@ -1,4 +1,4 @@
-"""Downloads avulsos: abas configuráveis com arquivos do servidor."""
+"""Standalone downloads: configurable tabs with files from the server."""
 
 from __future__ import annotations
 
@@ -13,13 +13,14 @@ from PyQt6.QtWidgets import (
 )
 
 from .. import remote
+from ..i18n import tr
 from . import icons, messages, theme
 from .widgets import FramelessDialog, Task, label
 
 
 class DownloadsDialog(FramelessDialog):
     def __init__(self, tabs, server: remote.RemoteServer, base_dir: Path, parent=None):
-        super().__init__("Downloads", width=560, parent=parent)
+        super().__init__(tr("Downloads"), width=560, parent=parent)
         self._tabs = list(tabs)
         self._server = server
         self._base_dir = Path(base_dir)
@@ -35,7 +36,7 @@ class DownloadsDialog(FramelessDialog):
         self.body.addWidget(self.tab_bar)
 
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["ARQUIVO", "TAMANHO", "MODIFICADO"])
+        self.tree.setHeaderLabels([tr("FILE"), tr("SIZE"), tr("MODIFIED")])
         self.tree.setRootIsDecorated(False)
         self.tree.setUniformRowHeights(True)
         self.tree.setSelectionMode(QTreeWidget.SelectionMode.NoSelection)
@@ -49,11 +50,11 @@ class DownloadsDialog(FramelessDialog):
         self.body.addWidget(self.tree)
 
         sel = QHBoxLayout()
-        self.btn_all = QPushButton("Marcar todos")
+        self.btn_all = QPushButton(tr("Select all"))
         self.btn_all.clicked.connect(lambda: self._check_all(True))
-        self.btn_none = QPushButton("Limpar seleção")
+        self.btn_none = QPushButton(tr("Clear selection"))
         self.btn_none.clicked.connect(lambda: self._check_all(False))
-        self.btn_folder = QPushButton("Abrir pasta")
+        self.btn_folder = QPushButton(tr("Open folder"))
         self.btn_folder.setIcon(icons.icon("folder", theme.palette().muted, 16))
         self.btn_folder.clicked.connect(self._open_folder)
         sel.addWidget(self.btn_all)
@@ -72,7 +73,7 @@ class DownloadsDialog(FramelessDialog):
 
         row = QHBoxLayout()
         row.addStretch()
-        self.btn_download = QPushButton("Baixar selecionados")
+        self.btn_download = QPushButton(tr("Download selected"))
         self.btn_download.setProperty("variant", "primary")
         self.btn_download.setIcon(icons.icon("download", theme.palette().on_accent, 16,
                                              disabled_color=theme.palette().faint))
@@ -91,7 +92,7 @@ class DownloadsDialog(FramelessDialog):
 
     def _on_tab_changed(self, index: int):
         self.progress.setValue(0)
-        self.dest.setText(f"Destino: {messages.path_html(self._destination())}")
+        self.dest.setText(tr("Destination: {path}", path=messages.path_html(self._destination())))
         if index in self._cache:
             self._populate(self._cache[index])
         else:
@@ -101,13 +102,13 @@ class DownloadsDialog(FramelessDialog):
         tab = self._tabs[index]
         self.tree.clear()
         self._set_busy(True)
-        self.status.setText("Conectando ao servidor…")
+        self.status.setText(tr("Connecting to the server…"))
 
         def work(ctx):
             with self._server.connect() as ftp:
-                ctx.status("Listando arquivos…")
+                ctx.status(tr("Listing files…"))
                 ftp.cwd(tab.remote_dir)
-                # Os .sha256 só servem para verificar os downloads; não são listados.
+                # .sha256 files only verify downloads; they are not listed.
                 entries = [e for e in remote.list_files(ftp)
                            if not e.name.lower().endswith(".sha256")]
                 names = {e.name.lower() for e in entries}
@@ -127,8 +128,9 @@ class DownloadsDialog(FramelessDialog):
 
         def fail(exc):
             self._set_busy(False)
-            self.status.setText("Não foi possível carregar a lista.")
-            messages.error(self, "Downloads", f"Não foi possível listar os arquivos:<br>{messages.describe(exc)}")
+            self.status.setText(tr("Could not load the list."))
+            messages.error(self, tr("Downloads"),
+                           tr("Could not list the files:<br>{error}", error=messages.describe(exc)))
 
         Task.start_new(self, work, done, fail, on_status=self.status.setText)
 
@@ -149,8 +151,8 @@ class DownloadsDialog(FramelessDialog):
                 item.setForeground(0, badge_color)
             self.tree.addTopLevelItem(item)
         self.tree.blockSignals(False)
-        self.status.setText(f"{len(entries)} arquivo(s) disponível(is)." if entries
-                            else "Nenhum arquivo disponível nesta aba.")
+        self.status.setText(tr("{count} file(s) available.", count=len(entries)) if entries
+                            else tr("No files available in this tab."))
         self._update_buttons()
 
     # -- seleção ----------------------------------------------------------
@@ -171,7 +173,7 @@ class DownloadsDialog(FramelessDialog):
             return
         count = len(self._selected())
         self.btn_download.setEnabled(count > 0)
-        self.btn_download.setText(f"Baixar {count} arquivo(s)" if count else "Baixar selecionados")
+        self.btn_download.setText(tr("Download {count} file(s)", count=count) if count else tr("Download selected"))
 
     def _set_busy(self, busy: bool):
         self._busy = busy
@@ -183,7 +185,7 @@ class DownloadsDialog(FramelessDialog):
     def _open_folder(self):
         folder = self._destination()
         folder.mkdir(parents=True, exist_ok=True)
-        os.startfile(folder)  # noqa: S606 — abre o Explorer na pasta de destino
+        os.startfile(folder)  # noqa: S606 — opens Explorer on the destination folder
 
     # -- download ---------------------------------------------------------
     def _download(self):
@@ -194,10 +196,11 @@ class DownloadsDialog(FramelessDialog):
         existing = [e.name for e in entries if (destination / e.name).exists()]
         if existing:
             names = "<br>".join(f"• {n}" for n in existing[:6])
-            more = f"<br>… e mais {len(existing) - 6}" if len(existing) > 6 else ""
-            if not messages.confirm(self, "Substituir arquivos?",
-                                    f"Estes arquivos já existem e serão substituídos:<br><br>{names}{more}",
-                                    confirm_label="Substituir"):
+            more = "<br>" + tr("… and {count} more", count=len(existing) - 6) if len(existing) > 6 else ""
+            if not messages.confirm(self, tr("Replace files?"),
+                                    tr("These files already exist and will be replaced:<br><br>{names}{more}",
+                                       names=names, more=more),
+                                    confirm_label=tr("Replace")):
                 return
 
         self._set_busy(True)
@@ -206,14 +209,14 @@ class DownloadsDialog(FramelessDialog):
             ok, errors = 0, []
             with self._server.connect() as ftp:
                 for n, entry in enumerate(entries, start=1):
-                    ctx.status(f"Baixando {n}/{len(entries)}: {entry.name}")
+                    ctx.status(tr("Downloading {n}/{total}: {name}", n=n, total=len(entries), name=entry.name))
                     ctx.progress(0)
                     try:
                         ftp.cwd(entry.directory)
                         remote.download(ftp, entry.name, destination / entry.name,
                                         entry.size, on_progress=ctx.progress)
                         ok += 1
-                    except Exception as exc:  # noqa: BLE001 — um arquivo não aborta os demais
+                    except Exception as exc:  # noqa: BLE001 — one file does not abort the rest
                         errors.append((entry.name, str(exc)))
             return ok, errors
 
@@ -223,16 +226,18 @@ class DownloadsDialog(FramelessDialog):
             self.progress.setValue(100 if ok and not errors else 0)
             if errors:
                 lines = "<br>".join(f"• {n}: {m}" for n, m in errors[:5])
-                self.status.setText(f"{ok} baixado(s), {len(errors)} com erro.")
-                messages.warning(self, "Download parcial",
-                                 f"<b>{ok}</b> arquivo(s) baixado(s).<br><br>Falhas:<br>{lines}")
+                self.status.setText(tr("{ok} downloaded, {failed} failed.", ok=ok, failed=len(errors)))
+                messages.warning(self, tr("Partial download"),
+                                 tr("<b>{ok}</b> file(s) downloaded.<br><br>Failures:<br>{lines}",
+                                    ok=ok, lines=lines))
             else:
-                self.status.setText(f"{ok} arquivo(s) salvo(s) em {destination}.")
+                self.status.setText(tr("{ok} file(s) saved to {path}.", ok=ok, path=destination))
                 self._check_all(False)
 
         def fail(exc):
             self._set_busy(False)
-            messages.error(self, "Downloads", f"Falha durante o download:<br>{messages.describe(exc)}")
+            messages.error(self, tr("Downloads"),
+                           tr("The download failed:<br>{error}", error=messages.describe(exc)))
 
         Task.start_new(self, work, done, fail, on_progress=self.progress.setValue,
                        on_status=self.status.setText)

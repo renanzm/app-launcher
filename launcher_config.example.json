@@ -2,6 +2,7 @@
   "app_name": "App Launcher",
   "app_id": "AppLauncher",
   "accent_color": "#7C5CFF",
+  "language": "auto",
   "support_url": "https://github.com/renanzm/app-launcher/issues/new",
 
   "server": {
@@ -25,26 +26,26 @@
     {
       "id": "notes",
       "name": "Notes Studio",
-      "description": "Aplicativo de demonstração servido pelo tools/demo_server.py.",
+      "description": "Demo application served by tools/demo_server.py.",
       "remote_dir": "/apps/notes",
       "package": "notes.zip",
       "install_dir": "Notes Studio",
       "executable": "notes.bat",
       "env": { "NOTES_LAUNCHED_BY": "app-launcher" },
       "extra_actions": [
-        { "label": "Abrir ferramenta de diagnóstico", "executable": "diagnostics.bat" }
+        { "label": "Open diagnostics tool", "executable": "diagnostics.bat" }
       ],
       "options": [
-        { "key": "verbose", "label": "Modo detalhado", "type": "bool", "env": "NOTES_VERBOSE",
-          "description": "Exibe mensagens extras ao iniciar." },
-        { "key": "workspace", "label": "Pasta de trabalho padrão", "type": "text", "env": "NOTES_WORKSPACE",
+        { "key": "verbose", "label": "Verbose mode", "type": "bool", "env": "NOTES_VERBOSE",
+          "description": "Shows extra messages on startup." },
+        { "key": "workspace", "label": "Default workspace folder", "type": "text", "env": "NOTES_WORKSPACE",
           "default": "C:\\Notes" }
       ],
       "custom_builds": {
         "remote_subdir": "custom-builds",
         "code_label": "Ticket",
         "code_pattern": "^\\d{5}$",
-        "code_hint": "Digite o número do ticket informado pelo suporte (5 dígitos).",
+        "code_hint": "Enter the ticket number provided by support (5 digits).",
         "package_names": ["build.zip", "dist.zip"],
         "carry_over_files": ["settings.ini"]
       }
@@ -52,7 +53,7 @@
     {
       "id": "reports",
       "name": "Reports Viewer",
-      "description": "Segundo aplicativo de demonstração, sem opções extras.",
+      "description": "Second demo application, with no extra options.",
       "remote_dir": "/apps/reports",
       "package": "reports.zip",
       "install_dir": "Reports Viewer",
@@ -62,17 +63,17 @@
 
   "downloads": [
     {
-      "label": "Ferramentas",
+      "label": "Tools",
       "remote_dir": "/tools",
-      "destination": "Ferramentas",
+      "destination": "Downloads/Tools",
       "extra_files": [
         { "name": "sample-data.csv", "remote_dir": "/apps/reports", "badge": "Reports" }
       ]
     },
     {
-      "label": "Instaladores",
+      "label": "Installers",
       "remote_dir": "/installers",
-      "destination": "Instaladores"
+      "destination": "Downloads/Installers"
     }
   ]
 }

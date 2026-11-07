@@ -117,7 +117,7 @@ class FormatTests(unittest.TestCase):
 
     def test_format_mdtm_handles_fraction_and_garbage(self):
         self.assertEqual(remote.format_mdtm(None), "—")
-        self.assertRegex(remote.format_mdtm("20260102030405.123"), r"^\d{2}/\d{2}/2026 \d{2}:\d{2}$")
+        self.assertRegex(remote.format_mdtm("20260102030405.123"), r"^2026-01-0[12] \d{2}:\d{2}$")
         self.assertEqual(remote.format_mdtm("bogus"), "bogus")
 
 
