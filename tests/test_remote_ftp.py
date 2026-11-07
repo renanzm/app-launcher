@@ -25,7 +25,7 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-@unittest.skipIf(FTPServer is None, "pyftpdlib não instalado (requirements-dev.txt)")
+@unittest.skipIf(FTPServer is None, "pyftpdlib not installed (requirements-dev.txt)")
 class RemoteFtpTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

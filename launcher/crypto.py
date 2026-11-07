@@ -19,6 +19,8 @@ import hashlib
 import hmac
 import os
 
+from .i18n import tr
+
 MAGIC = b"V1"
 ITERATIONS = 200_000
 
@@ -32,9 +34,9 @@ def _decode_secret(secret: str) -> bytes:
     try:
         raw = base64.b64decode(secret, validate=True)
     except Exception:
-        raise ValueError("segredo inválido: esperado base64") from None
+        raise ValueError(tr("Invalid secret: base64 expected")) from None
     if len(raw) < 16:
-        raise ValueError("segredo curto demais (mínimo 16 bytes)")
+        raise ValueError(tr("Secret too short (minimum 16 bytes)"))
     return raw
 
 
@@ -68,12 +70,12 @@ def decrypt(token: str, secret: str) -> str:
     try:
         blob = base64.b64decode(token, validate=True)
     except Exception as exc:
-        raise ValueError(f"token base64 inválido: {exc}") from None
+        raise ValueError(tr("Invalid base64 token: {error}", error=exc)) from None
     if len(blob) < 50 or blob[:2] != MAGIC:
-        raise ValueError("formato de token não reconhecido")
+        raise ValueError(tr("Unrecognised token format"))
     salt, mac, ct = blob[2:18], blob[18:50], blob[50:]
     k_enc, k_mac = _derive_keys(key, salt)
     if not hmac.compare_digest(mac, hmac.new(k_mac, salt + ct, hashlib.sha256).digest()):
-        raise ValueError("HMAC inválido — segredo incorreto ou token adulterado")
+        raise ValueError(tr("Invalid HMAC — wrong secret or tampered token"))
     plain = bytes(a ^ b for a, b in zip(ct, _keystream(k_enc, len(ct))))
     return plain.decode("utf-8")

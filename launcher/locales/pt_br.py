@@ -38,6 +38,12 @@ STRINGS = {
     "The SHA-256 of {name} does not match the one published on the server.":
         "O SHA-256 de {name} não confere com o publicado no servidor.",
 
+    "Invalid secret: base64 expected": "Segredo inválido: esperado base64",
+    "Secret too short (minimum 16 bytes)": "Segredo curto demais (mínimo 16 bytes)",
+    "Invalid base64 token: {error}": "Token base64 inválido: {error}",
+    "Unrecognised token format": "Formato de token não reconhecido",
+    "Invalid HMAC — wrong secret or tampered token": "HMAC inválido — segredo incorreto ou token adulterado",
+
     # -- shared -----------------------------------------------------------------
     "OK": "OK",
     "Cancel": "Cancelar",

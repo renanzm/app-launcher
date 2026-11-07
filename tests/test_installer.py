@@ -118,7 +118,7 @@ class LaunchEnvTests(unittest.TestCase):
         self.assertNotIn("DEMO_FLAG", env)
         self.assertNotIn("DEMO_NAME", env)
         self.assertEqual(env["PATH"], "x")
-        self.assertEqual(base["DEMO_FLAG"], "1", "o ambiente base não deve ser alterado")
+        self.assertEqual(base["DEMO_FLAG"], "1", "the base environment must not be modified")
 
     def test_defaults_apply_when_option_unset(self):
         env = installer.build_launch_env(self.app, {}, base_env={})
