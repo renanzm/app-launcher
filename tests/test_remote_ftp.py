@@ -1,4 +1,4 @@
-"""Testes contra um servidor FTP real (pyftpdlib) rodando em uma thread."""
+"""Tests against a real FTP server (pyftpdlib) running in a thread."""
 
 import hashlib
 import logging

@@ -1,7 +1,7 @@
-"""Tema escuro único, aplicado no QApplication (todas as janelas herdam).
+"""Single dark theme, applied on the QApplication (every window inherits it).
 
-A cor de destaque vem de `accent_color` na configuração; o restante da
-paleta é neutro, para o launcher combinar com qualquer marca.
+The accent colour comes from `accent_color` in the configuration; the rest of
+the palette is neutral, so the launcher fits any brand.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ class Palette:
 
 def make_palette(accent_hex: str) -> Palette:
     accent = QColor(accent_hex)
-    # Texto escuro sobre cores claras, branco sobre as demais (WCAG, aproximado).
+    # Dark text on light colours, white on the rest (WCAG, approximate).
     r, g, b = accent.redF(), accent.greenF(), accent.blueF()
     luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
     soft = QColor(accent)
@@ -262,7 +262,7 @@ def apply(app: QApplication, accent_hex: str):
 
 
 def set_role(widget: QWidget, prop: str, value: str):
-    """Altera uma propriedade usada nos seletores do QSS e reaplica o estilo."""
+    """Changes a property used by the QSS selectors and re-applies the style."""
     widget.setProperty(prop, value)
     style = widget.style()
     style.unpolish(widget)

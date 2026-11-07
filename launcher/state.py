@@ -1,9 +1,9 @@
-"""Estado persistente do launcher (preferências, versões instaladas, segredos).
+"""Persistent launcher state (preferences, installed versions, secrets).
 
-Fica em `%LOCALAPPDATA%\\<app_id>\\state.json` — por usuário do Windows, fora
-da pasta de instalação e sem depender do Registro. Segredos (senha lembrada,
-credenciais do servidor em cache) são cifrados com a DPAPI do Windows antes de
-serem gravados, então só o mesmo usuário Windows consegue lê-los.
+Lives in `%LOCALAPPDATA%\\<app_id>\\state.json` — per Windows user, outside the
+install folder and without relying on the Registry. Secrets (remembered
+password, cached server credentials) are encrypted with Windows DPAPI before
+being written, so only the same Windows user can read them.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 # ---------------------------------------------------------------------------
-# DPAPI (CryptProtectData) — sem dependências externas
+# DPAPI (CryptProtectData) — no external dependencies
 # ---------------------------------------------------------------------------
 
 if sys.platform == "win32":
@@ -40,13 +40,13 @@ if sys.platform == "win32":
             return ctypes.string_at(blob_out.pbData, blob_out.cbData)
         finally:
             ctypes.windll.kernel32.LocalFree(blob_out.pbData)
-else:  # pragma: no cover - o launcher é Windows-only; isto só mantém o import.
+else:  # pragma: no cover - the launcher is Windows-only; this only keeps the import working.
     def _dpapi(data: bytes, protect: bool):
         return None
 
 
 def protect(plaintext: str) -> str | None:
-    """Cifra com DPAPI e devolve base64 (None se a DPAPI falhar)."""
+    """Encrypts with DPAPI and returns base64 (None if DPAPI fails)."""
     raw = _dpapi(plaintext.encode("utf-8"), protect=True)
     return base64.b64encode(raw).decode("ascii") if raw is not None else None
 
@@ -60,7 +60,7 @@ def unprotect(token: str) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# Arquivo de estado
+# State file
 # ---------------------------------------------------------------------------
 
 def default_state_path(app_id: str) -> Path:
@@ -69,7 +69,7 @@ def default_state_path(app_id: str) -> Path:
 
 
 class StateStore:
-    """Dicionário persistido em JSON, gravado de forma atômica a cada mudança."""
+    """Dictionary persisted as JSON, written atomically on every change."""
 
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -93,7 +93,7 @@ class StateStore:
             Path(tmp).unlink(missing_ok=True)
             raise
 
-    # -- acesso genérico por seção/chave --------------------------------
+    # -- generic access by section/key ----------------------------------
     def get(self, section: str, key: str, default=None):
         return self._data.get(section, {}).get(key, default)
 
@@ -109,7 +109,7 @@ class StateStore:
             del self._data[section][key]
             self._write()
 
-    # -- preferências ----------------------------------------------------
+    # -- preferences -----------------------------------------------------
     def pref(self, key: str, default=False):
         return self.get("preferences", key, default)
 
@@ -123,7 +123,7 @@ class StateStore:
         self.set("app_options", f"{app_id}.{key}", value)
 
     def option_value(self, app_id: str, option):
-        """Valor de uma opção de app; as do tipo "password" ficam cifradas."""
+        """Value of an app option; "password" ones are stored encrypted."""
         if option.type == "password":
             value = self.secret(f"option.{app_id}.{option.key}")
             return option.default if value is None else value
@@ -138,9 +138,9 @@ class StateStore:
     def option_values(self, app) -> dict:
         return {o.key: self.option_value(app.id, o) for o in app.options}
 
-    # -- versão instalada (MDTM|SIZE) ------------------------------------
+    # -- installed version (MDTM|SIZE) -----------------------------------
     def install_record(self, key: str):
-        """Retorna (mdtm, size) ou None."""
+        """Returns (mdtm, size) or None."""
         raw = self.get("installed", key)
         if isinstance(raw, dict) and raw.get("mdtm"):
             try:
@@ -155,7 +155,7 @@ class StateStore:
     def clear_install_record(self, key: str):
         self.delete("installed", key)
 
-    # -- segredos (DPAPI) ------------------------------------------------
+    # -- secrets (DPAPI) -------------------------------------------------
     def secret(self, key: str) -> str | None:
         token = self.get("secrets", key)
         return unprotect(token) if token else None

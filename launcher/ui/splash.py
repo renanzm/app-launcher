@@ -1,4 +1,4 @@
-"""Tela de abertura desenhada em código (marca + nome do launcher)."""
+"""Splash screen drawn in code (mark + launcher name)."""
 
 from __future__ import annotations
 
@@ -58,7 +58,7 @@ class Splash(QWidget):
         p.setPen(QColor(pal.muted))
         p.drawText(QRectF(0, 130, self.width(), 20), Qt.AlignmentFlag.AlignCenter, self._subtitle)
 
-        # Barra indeterminada.
+        # Indeterminate bar.
         track = QRectF(110, 166, self.width() - 220, 4)
         bar = QPainterPath()
         bar.addRoundedRect(track, 2, 2)
@@ -95,7 +95,7 @@ class Splash(QWidget):
         self._shown_at = time.monotonic()
 
     def wait_minimum(self):
-        """Garante o tempo mínimo de exibição sem bloquear o event loop."""
+        """Guarantees the minimum display time without blocking the event loop."""
         if self._shown_at is None:
             return
         remaining = MIN_DURATION_MS - int((time.monotonic() - self._shown_at) * 1000)

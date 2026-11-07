@@ -13,19 +13,19 @@ dist/
 *.spec
 !Launcher.spec
 
-# Configuração real do ambiente (use launcher_config.example.json como base)
+# Real environment configuration (use launcher_config.example.json as a base)
 launcher_config.json
 
-# Gerados em tempo de execução
+# Generated at runtime
 *.exe
 _update_launcher.bat
 .launcher-tmp/
 *.part
 
-# Servidor de demonstração (tools/demo_server.py)
+# Demo server (tools/demo_server.py)
 demo-server/
 
-# Apps instalados ao rodar o launcher a partir do código-fonte
+# Apps installed when running the launcher from source
 Notes Studio*/
 Reports Viewer/
 /Downloads/

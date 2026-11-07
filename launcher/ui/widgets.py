@@ -1,4 +1,4 @@
-"""Componentes reutilizáveis: janela sem moldura, barra de título, toggle e tarefas."""
+"""Reusable components: frameless window, title bar, toggle and tasks."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ def icon_button(name: str, tooltip: str, object_name: str = "IconButton", size: 
 
 
 class TitleBar(QWidget):
-    """Barra superior arrastável com marca, título e botões à direita."""
+    """Draggable top bar with mark, title and buttons on the right."""
 
     def __init__(self, title: str, show_mark: bool = True, parent=None):
         super().__init__(parent)
@@ -80,7 +80,7 @@ class TitleBar(QWidget):
 
 
 class _FramelessMixin:
-    """Monta o cartão arredondado com sombra e o fade-in de abertura."""
+    """Builds the rounded card with shadow and the opening fade-in."""
 
     def _setup_frame(self, title: str, width: int, show_mark: bool, closable: bool):
         self.setWindowTitle(title)
@@ -155,7 +155,7 @@ class FramelessDialog(_FramelessMixin, QDialog):
 
 
 class ToggleSwitch(QWidget):
-    """Interruptor animado."""
+    """Animated toggle switch."""
 
     toggled = pyqtSignal(bool)
 
@@ -239,7 +239,7 @@ class StatusDot(QWidget):
 
 
 class VersionTile(QFrame):
-    """Cartão "rótulo + valor" com indicador colorido."""
+    """"Caption + value" card with a coloured indicator."""
 
     def __init__(self, caption: str, parent=None):
         super().__init__(parent)
@@ -263,11 +263,11 @@ class VersionTile(QFrame):
 
 
 # ---------------------------------------------------------------------------
-# Trabalho em segundo plano
+# Background work
 # ---------------------------------------------------------------------------
 
 class TaskContext:
-    """Repassado à função da tarefa para reportar progresso e status."""
+    """Handed to the task function so it can report progress and status."""
 
     def __init__(self, task: "Task"):
         self._task = task
@@ -280,10 +280,10 @@ class TaskContext:
 
 
 class Task(QThread):
-    """Executa `fn(ctx)` fora da thread da interface.
-
-    Os sinais são conectados com QueuedConnection, então os callbacks rodam
-    sempre na thread da interface, mesmo sendo lambdas.
+    """Runs `fn(ctx)` off the UI thread.
+    
+    Signals are connected with QueuedConnection, so callbacks always run on the
+    UI thread, even when they are lambdas.
     """
 
     progress = pyqtSignal(int)
@@ -300,7 +300,7 @@ class Task(QThread):
     def run(self):
         try:
             result = self._fn(TaskContext(self))
-        except Exception as exc:  # noqa: BLE001 — repassado para a interface
+        except Exception as exc:  # noqa: BLE001 — handed over to the interface
             exc.__traceback_text__ = traceback.format_exc()
             self.failed.emit(exc)
         else:

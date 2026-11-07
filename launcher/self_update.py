@@ -1,10 +1,10 @@
-"""Atualização do próprio launcher (somente no .exe empacotado).
+"""Self-update of the launcher itself (packaged .exe only).
 
-Fluxo: baixa `<exe>.new.exe`, grava um .bat que espera este processo sair,
-troca os arquivos e reabre o launcher com `--applied-self-update <mdtm> <size>`.
-Na reabertura, a versão só é registrada se o executável em disco tiver mesmo
-o tamanho novo — se a troca falhou (antivírus, permissão, outra instância
-aberta), o registro não muda e a atualização é tentada na próxima abertura.
+Flow: downloads `<exe>.new.exe`, writes a .bat that waits for this process to
+exit, swaps the files and reopens the launcher with `--applied-self-update <mdtm> <size>`.
+On reopening, the version is only recorded if the executable on disk really has
+the new size — if the swap failed (antivirus, permissions, another running
+instance), the record does not change and the update is retried on the next start.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def cleanup_leftovers():
 
 
 def consume_applied_args(argv: list, store, exe_size=running_exe_size):
-    """Remove o marcador de argv. Retorna (argv_limpo, falhou)."""
+    """Removes the marker from argv. Returns (clean_argv, failed)."""
     if MARKER not in argv:
         return argv, False
     idx = argv.index(MARKER)
@@ -68,10 +68,10 @@ def consume_applied_args(argv: list, store, exe_size=running_exe_size):
 
 
 def needs_update(record, remote_mdtm: str, remote_size: int, local_size: int | None) -> bool:
-    """Compara o .exe publicado com o registro local.
-
-    Sem registro (primeira execução), um tamanho igual ao publicado é tomado
-    como "já atualizado" — o chamador então só grava o registro.
+    """Compares the published .exe with the local record.
+    
+    Without a record (first run), a size equal to the published one is taken
+    as "already updated" — the caller then only writes the record.
     """
     if record:
         return not (record[0] == remote_mdtm and record[1] == remote_size)
@@ -111,14 +111,14 @@ def build_swap_script(exe: Path, new: Path, old: Path, pid: int, mdtm: str, size
 
 
 def apply(new_exe: Path, mdtm: str, size: int):
-    """Grava o .bat de troca e o dispara desacoplado. O chamador deve encerrar o app."""
+    """Writes the swap .bat and launches it detached. The caller must exit the app."""
     exe = Path(sys.executable)
     _, _, bat = leftover_paths(exe)
     old = exe.with_name(f"{exe.stem}.old.exe")
     bat.write_text(build_swap_script(exe, new_exe, old, os.getpid(), mdtm, size), encoding="ascii")
 
-    # O .exe --onefile do PyInstaller exporta _MEIPASS/_PYI*; se o novo processo
-    # herdar essas variáveis, tenta usar a pasta temporária do processo antigo.
+    # PyInstaller's --onefile .exe exports _MEIPASS/_PYI*; if the new process
+    # inherits those variables, it tries to use the old process's temp folder.
     env = {k: v for k, v in os.environ.items() if not k.startswith(("_MEI", "_PYI"))}
     env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)

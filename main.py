@@ -1,4 +1,4 @@
-"""Entrada usada pelo PyInstaller (equivale a `python -m launcher`)."""
+"""Entry point used by PyInstaller (equivalent to `python -m launcher`)."""
 
 import sys
 

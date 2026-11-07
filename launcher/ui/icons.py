@@ -1,7 +1,7 @@
-"""Ícones de linha desenhados com QPainter (sem arquivos de imagem).
+"""Line icons drawn with QPainter (no image files).
 
-Cada ícone é desenhado num canvas lógico 24×24 e renderizado em QPixmap com
-o devicePixelRatio da tela, então fica nítido em monitores com escala.
+Each icon is drawn on a 24×24 logical canvas and rendered into a QPixmap with
+the screen's devicePixelRatio, so it stays sharp on scaled monitors.
 """
 
 from __future__ import annotations
@@ -223,11 +223,11 @@ def icon(name: str, color: str | QColor, size: int = 18,
 
 
 # ---------------------------------------------------------------------------
-# Marca do launcher e avatares de aplicativo
+# Launcher mark and application avatars
 # ---------------------------------------------------------------------------
 
 def paint_mark(p: QPainter, rect: QRectF, accent: QColor):
-    """Marca do launcher: quadrado arredondado em gradiente com um "play" em camadas."""
+    """Launcher mark: rounded square with a gradient and a layered "play" symbol."""
     p.save()
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
     s = rect.width()
@@ -268,7 +268,7 @@ def mark_pixmap(accent: str | QColor, size: int = 64, dpr: float = 2.0) -> QPixm
 
 
 def avatar_pixmap(text: str, accent: str | QColor, size: int = 36, dpr: float = 2.0) -> QPixmap:
-    """Avatar com as iniciais do aplicativo (fallback quando não há ícone)."""
+    """Avatar with the application's initials (fallback when there is no icon)."""
     words = [w for w in text.replace("-", " ").split() if w[:1].isalnum()]
     initials = "".join(w[0] for w in words[:2]).upper() or "?"
     base = QColor(accent)

@@ -32,9 +32,9 @@ class ServerConfig:
     port: int = 21
     user: str = "anonymous"
     password: str = ""
-    password_enc: str = ""           # token V1 (ver launcher/crypto.py)
-    secret: str = ""                 # base64 da chave usada em password_enc
-    credentials_url: str = ""        # JSON remoto opcional com host/user/password
+    password_enc: str = ""           # V1 token (see launcher/crypto.py)
+    secret: str = ""                 # base64 of the key used for password_enc
+    credentials_url: str = ""        # optional remote JSON with host/user/password
     encoding: str = "utf-8"
     timeout: int = 20
 
@@ -45,9 +45,9 @@ class AuthConfig:
     url: str = ""
     title: str = ""                  # empty -> translated default ("Sign in")
     user_label: str = ""             # empty -> translated default ("Username")
-    success_contains: str = ""       # texto que precisa constar na resposta
-    session_env_user: str = ""       # variável que recebe o usuário logado
-    session_env_password: str = ""   # variável que recebe a senha da sessão
+    success_contains: str = ""       # text the response must contain
+    session_env_user: str = ""       # variable that receives the signed-in user
+    session_env_password: str = ""   # variable that receives the session password
     timeout: int = 15
 
     @property
@@ -78,7 +78,7 @@ class CustomBuildsConfig:
     code_pattern: str = r"^\d{4,10}$"
     code_hint: str = ""              # empty -> translated default
     package_names: tuple = ("build.zip", "dist.zip")
-    carry_over_files: tuple = ()     # copiados da instalação oficial
+    carry_over_files: tuple = ()     # copied from the official installation
 
 
 @dataclass(frozen=True)

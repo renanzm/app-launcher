@@ -1,8 +1,8 @@
-"""Acesso ao servidor de distribuição (FTP ou FTPS).
+"""Access to the distribution server (FTP or FTPS).
 
-Concentra: resolução das credenciais, conexão, consulta de metadados
-(MDTM/SIZE), listagem de diretórios e download com progresso e verificação
-opcional de SHA-256 (`<arquivo>.sha256` ao lado do arquivo no servidor).
+Covers: credential resolution, connection, metadata queries (MDTM/SIZE),
+directory listing and download with progress and optional SHA-256
+verification (`<file>.sha256` next to the file on the server).
 """
 
 from __future__ import annotations
@@ -24,11 +24,11 @@ _CACHE_KEY = "server_credentials"
 
 
 class CredentialsError(RuntimeError):
-    """Não há como obter as credenciais do servidor."""
+    """The server credentials cannot be obtained."""
 
 
 class IntegrityError(RuntimeError):
-    """O arquivo baixado não confere com o tamanho/hash publicado."""
+    """The downloaded file does not match the published size/hash."""
 
 
 @dataclass(frozen=True)
@@ -49,7 +49,7 @@ class RemoteFile:
 
 
 # ---------------------------------------------------------------------------
-# Credenciais
+# Credentials
 # ---------------------------------------------------------------------------
 
 def _password_from(data: dict, secret: str) -> str:
@@ -63,7 +63,7 @@ def _password_from(data: dict, secret: str) -> str:
 def _fetch_remote_credentials(url: str, timeout: int = 5) -> dict:
     import requests
 
-    # Parâmetro variável evita que um CDN devolva uma versão antiga do JSON.
+    # A varying parameter keeps a CDN from returning an old version of the JSON.
     response = requests.get(
         url, params={"_": int(time.time())},
         headers={"Cache-Control": "no-cache"}, timeout=timeout,
@@ -76,11 +76,11 @@ def _fetch_remote_credentials(url: str, timeout: int = 5) -> dict:
 
 
 def resolve_credentials(server: ServerConfig, store=None, fetch=_fetch_remote_credentials) -> Credentials:
-    """Credenciais efetivas do servidor.
-
-    Sem `credentials_url`, usa o que está na configuração. Com ela, o JSON
-    remoto é a fonte da verdade; a última resposta válida fica em cache
-    (cifrada com DPAPI) para o launcher funcionar quando a URL estiver fora.
+    """Effective server credentials.
+    
+    Without `credentials_url`, uses what is in the configuration. With it, the
+    remote JSON is the source of truth; the last valid response is cached
+    (encrypted with DPAPI) so the launcher works when the URL is down.
     """
     if not server.credentials_url:
         return Credentials(
@@ -117,7 +117,7 @@ def resolve_credentials(server: ServerConfig, store=None, fetch=_fetch_remote_cr
 
 
 # ---------------------------------------------------------------------------
-# Conexão
+# Connection
 # ---------------------------------------------------------------------------
 
 class RemoteServer:
@@ -145,7 +145,7 @@ class RemoteServer:
 
 
 # ---------------------------------------------------------------------------
-# Operações (recebem um ftplib.FTP já conectado)
+# Operations (take an already-connected ftplib.FTP)
 # ---------------------------------------------------------------------------
 
 def try_cwd(ftp, path: str) -> bool:
@@ -157,14 +157,14 @@ def try_cwd(ftp, path: str) -> bool:
 
 
 def stat(ftp, name: str) -> RemoteFile:
-    """MDTM + SIZE de um arquivo do diretório atual. Levanta error_perm se não existir."""
+    """MDTM + SIZE of a file in the current directory. Raises error_perm if it does not exist."""
     mdtm = ftp.sendcmd(f"MDTM {name}").split()[1]
     size = ftp.size(name)
     return RemoteFile(name=name, mdtm=mdtm, size=int(size) if size is not None else None)
 
 
 def read_text(ftp, name: str, max_bytes: int = 1_000_000) -> str | None:
-    """Conteúdo textual de um arquivo pequeno; None se não existir."""
+    """Text content of a small file; None if it does not exist."""
     buf = bytearray()
 
     def collect(chunk):
@@ -180,7 +180,7 @@ def read_text(ftp, name: str, max_bytes: int = 1_000_000) -> str | None:
 
 
 def _parse_sha256(text: str | None) -> str | None:
-    """Aceita tanto `<hash>` quanto o formato do sha256sum (`<hash>  arquivo`)."""
+    """Accepts both `<hash>` and the sha256sum format (`<hash>  file`)."""
     if not text:
         return None
     token = text.strip().split()[0].lower() if text.strip() else ""
@@ -191,10 +191,10 @@ def _parse_sha256(text: str | None) -> str | None:
 
 def download(ftp, name: str, target: Path, expected_size: int | None = None,
              on_progress=None, verify_hash: bool = True) -> Path:
-    """Baixa `name` (do diretório atual) para `target`, de forma segura.
-
-    Grava em `<target>.part` e só renomeia no fim, depois de conferir o
-    tamanho e — se o servidor publicar `<name>.sha256` — o hash.
+    """Downloads `name` (from the current directory) to `target`, safely.
+    
+    Writes to `<target>.part` and only renames at the end, after checking the
+    size and — if the server publishes `<name>.sha256` — the hash.
     """
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -230,7 +230,7 @@ def download(ftp, name: str, target: Path, expected_size: int | None = None,
 
 
 def list_files(ftp) -> list[RemoteFile]:
-    """Arquivos do diretório atual. Usa MLSD e cai para NLST+SIZE+MDTM."""
+    """Files in the current directory. Uses MLSD and falls back to NLST+SIZE+MDTM."""
     directory = ftp.pwd()
     try:
         entries = []
@@ -259,7 +259,7 @@ def list_files(ftp) -> list[RemoteFile]:
             mdtm = ftp.sendcmd(f"MDTM {name}").split()[1]
         except ftplib.all_errors:
             mdtm = None
-        # Diretórios costumam falhar em SIZE e MDTM; arquivos raramente nos dois.
+        # Directories usually fail SIZE and MDTM; files rarely fail both.
         if size is None and mdtm is None:
             try:
                 ftp.cwd(name)
@@ -272,7 +272,7 @@ def list_files(ftp) -> list[RemoteFile]:
 
 
 def file_info(ftp, directory: str, name: str) -> RemoteFile:
-    """Metadados de um arquivo em outro diretório; campos None se indisponíveis."""
+    """Metadata of a file in another directory; fields are None if unavailable."""
     saved = ftp.pwd()
     try:
         if not try_cwd(ftp, directory):

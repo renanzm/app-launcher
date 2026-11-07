@@ -32,7 +32,7 @@ def render_png(size: int, accent: str) -> bytes:
 
 
 def build_ico(images: dict) -> bytes:
-    """ICO com entradas PNG (formato aceito pelo Windows Vista em diante)."""
+    """ICO with PNG entries (format accepted by Windows Vista onwards)."""
     header = struct.pack("<HHH", 0, 1, len(images))
     offset = 6 + 16 * len(images)
     entries, blobs = b"", b""

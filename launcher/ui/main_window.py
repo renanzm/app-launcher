@@ -37,13 +37,13 @@ class MainWindow(FramelessWindow):
         self._session = auth.session_env(config.auth, user, password)
         self._session_user, self._session_password = user, password
         self._self_update_failed = self_update_failed
-        self._remote: dict[str, remote.RemoteFile] = {}   # último MDTM/SIZE visto por app
+        self._remote: dict[str, remote.RemoteFile] = {}   # last MDTM/SIZE seen per app
         self._pending: remote.RemoteFile | None = None
         self._busy = False
         self._self_updating = False
         pal = theme.palette()
 
-        # -- barra de título ----------------------------------------------
+        # -- title bar ----------------------------------------------------
         self.btn_help = icon_button("help", tr("Help and support"))
         self.btn_downloads = icon_button("box", tr("Downloads"))
         self.btn_settings = icon_button("settings", tr("Settings"))
@@ -58,7 +58,7 @@ class MainWindow(FramelessWindow):
         self.btn_settings.clicked.connect(self._open_settings)
         self.btn_downloads.setVisible(bool(config.downloads))
 
-        # -- seletor de aplicativo -------------------------------------------
+        # -- application selector --------------------------------------------
         self.body.addWidget(label(tr("APPLICATION"), "overline"))
         self.combo = QComboBox()
         self.combo.setIconSize(QSize(28, 28))
@@ -69,7 +69,7 @@ class MainWindow(FramelessWindow):
         self.description = label("", "caption", wrap=True)
         self.body.addWidget(self.description)
 
-        # -- versões ---------------------------------------------------------
+        # -- versions --------------------------------------------------------
         tiles = QHBoxLayout()
         tiles.setSpacing(10)
         self.tile_local = VersionTile(tr("Installed"))
@@ -88,7 +88,7 @@ class MainWindow(FramelessWindow):
         self.body.addWidget(self.progress)
         self.body.addSpacing(6)
 
-        # -- ações -----------------------------------------------------------
+        # -- actions ---------------------------------------------------------
         self.btn_open = QPushButton()
         self.btn_open.setProperty("variant", "primary")
         self.btn_open.setMinimumHeight(46)
@@ -128,7 +128,7 @@ class MainWindow(FramelessWindow):
         self.body.addWidget(divider())
         self.body.addWidget(self.footer)
 
-        # Restaura o último app usado.
+        # Restore the last app used.
         last = store.pref("last_app", "")
         index = next((i for i, a in enumerate(config.apps) if a.id == last), 0)
         self.combo.setCurrentIndex(index)
@@ -138,7 +138,7 @@ class MainWindow(FramelessWindow):
         QTimer.singleShot(400, self._startup_checks)
 
     # ------------------------------------------------------------------
-    # Estado
+    # State
     # ------------------------------------------------------------------
 
     @property
@@ -149,7 +149,7 @@ class MainWindow(FramelessWindow):
         return installer.install_path(self.base_dir, self.app)
 
     def _local_record(self):
-        """(mdtm, size) da instalação oficial, se a pasta ainda existir."""
+        """(mdtm, size) of the official installation, if the folder still exists."""
         if not self._install_dir().is_dir():
             return None
         return self.store.install_record(self.app.id)
@@ -253,7 +253,7 @@ class MainWindow(FramelessWindow):
             messages.error(self, title, messages.describe(exc))
 
     # ------------------------------------------------------------------
-    # Atualização do aplicativo
+    # Application update
     # ------------------------------------------------------------------
 
     def _on_update_clicked(self):
@@ -328,13 +328,13 @@ class MainWindow(FramelessWindow):
                        on_progress=self.progress.setValue, on_status=self.status.setText)
 
     # ------------------------------------------------------------------
-    # Menu "mais opções"
+    # "More options" menu
     # ------------------------------------------------------------------
 
     def _show_more_menu(self):
         pal = theme.palette()
         menu = QMenu(self)
-        # Sem isso os cantos arredondados do QSS aparecem sobre um fundo quadrado.
+        # Without this, the QSS rounded corners show over a square background.
         menu.setWindowFlags(menu.windowFlags() | Qt.WindowType.FramelessWindowHint
                             | Qt.WindowType.NoDropShadowWindowHint)
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -402,7 +402,7 @@ class MainWindow(FramelessWindow):
         self._refresh(tr("{name} was uninstalled.", name=app.name))
 
     # ------------------------------------------------------------------
-    # Execução
+    # Launching
     # ------------------------------------------------------------------
 
     def _launch_env(self) -> dict:
@@ -424,7 +424,7 @@ class MainWindow(FramelessWindow):
             self.close()
 
     # ------------------------------------------------------------------
-    # Diálogos da barra de título
+    # Title bar dialogs
     # ------------------------------------------------------------------
 
     def _open_settings(self):
@@ -451,7 +451,7 @@ class MainWindow(FramelessWindow):
             self._open_installed_builds()
 
     # ------------------------------------------------------------------
-    # Builds personalizadas
+    # Custom builds
     # ------------------------------------------------------------------
 
     def _ask_build_code(self):
@@ -550,7 +550,7 @@ class MainWindow(FramelessWindow):
             self._launch(app.executable, Path(dlg.selected["folder"]))
 
     # ------------------------------------------------------------------
-    # Inicialização: auto-atualização do launcher e do app
+    # Startup: self-update of the launcher and the app
     # ------------------------------------------------------------------
 
     def _startup_checks(self):
@@ -583,7 +583,7 @@ class MainWindow(FramelessWindow):
                     return None
                 try:
                     return remote.stat(ftp, su.file_name)
-                except Exception:  # noqa: BLE001 — sem .exe publicado: nada a fazer
+                except Exception:  # noqa: BLE001 — no .exe published: nothing to do
                     return None
 
         def done(rf):

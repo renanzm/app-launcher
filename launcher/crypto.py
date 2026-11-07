@@ -1,15 +1,15 @@
-"""Cifra simples (stdlib) para guardar senhas em JSON publicado.
+"""Simple cipher (stdlib only) for storing passwords in a published JSON.
 
-Formato V1 — `b"V1" | salt(16) | hmac(32) | ciphertext`, codificado em base64:
-  - PBKDF2-HMAC-SHA256 (200 000 iterações) deriva 64 bytes de `secret + salt`;
-  - os 32 primeiros bytes semeiam um keystream SHA-256 em counter mode (XOR);
-  - os 32 últimos são a chave do HMAC-SHA256 sobre `salt + ciphertext`.
+V1 format — `b"V1" | salt(16) | hmac(32) | ciphertext`, base64-encoded:
+  - PBKDF2-HMAC-SHA256 (200,000 iterations) derives 64 bytes from `secret + salt`;
+  - the first 32 bytes seed a SHA-256 keystream in counter mode (XOR);
+  - the last 32 are the HMAC-SHA256 key over `salt + ciphertext`.
 
-É ofuscação com integridade, não um cofre: quem tem o segredo (embutido na
-configuração do launcher) decifra o token. Serve para que um JSON acessível
-por link não exponha a senha em texto puro.
+It is obfuscation with integrity, not a vault: whoever has the secret (embedded
+in the launcher configuration) can decrypt the token. It exists so that a JSON
+reachable by link does not expose the password in plain text.
 
-Para gerar tokens: `python -m tools.encrypt_password`.
+To generate tokens: `python -m tools.encrypt_password`.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ ITERATIONS = 200_000
 
 
 def generate_secret() -> str:
-    """Novo segredo aleatório de 32 bytes, em base64."""
+    """New random 32-byte secret, base64-encoded."""
     return base64.b64encode(os.urandom(32)).decode("ascii")
 
 
@@ -63,7 +63,7 @@ def encrypt(plaintext: str, secret: str) -> str:
 
 
 def decrypt(token: str, secret: str) -> str:
-    """Decifra um token V1. Levanta ValueError em qualquer falha."""
+    """Decrypts a V1 token. Raises ValueError on any failure."""
     key = _decode_secret(secret)
     try:
         blob = base64.b64decode(token, validate=True)

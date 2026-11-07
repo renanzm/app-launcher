@@ -1,4 +1,4 @@
-"""Instalação local: extração segura, builds personalizadas e ambiente de execução."""
+"""Local installation: safe extraction, custom builds and the launch environment."""
 
 from __future__ import annotations
 
@@ -14,16 +14,16 @@ from pathlib import Path
 from .config import AppConfig
 from .i18n import tr
 
-# Metadados gravados dentro da pasta de cada build personalizada.
+# Metadata written inside each custom build's folder.
 BUILD_META_FILE = ".launcher-build.json"
 
 
 # ---------------------------------------------------------------------------
-# Extração
+# Extraction
 # ---------------------------------------------------------------------------
 
 def safe_extract_zip(zip_path: Path, dest_dir: Path, on_progress=None):
-    """Extrai `zip_path` em `dest_dir` recusando entradas fora do destino (Zip Slip)."""
+    """Extracts `zip_path` into `dest_dir`, refusing entries outside the destination (Zip Slip)."""
     dest_dir = Path(dest_dir).resolve()
     dest_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(zip_path) as zf:
@@ -49,7 +49,7 @@ def safe_extract_zip(zip_path: Path, dest_dir: Path, on_progress=None):
 
 
 # ---------------------------------------------------------------------------
-# Caminhos de instalação
+# Install paths
 # ---------------------------------------------------------------------------
 
 def install_path(base_dir: Path, app: AppConfig) -> Path:
@@ -67,7 +67,7 @@ def count_files(folder: Path) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Builds personalizadas (entregas por ticket, em pastas isoladas)
+# Custom builds (per-ticket deliveries, in isolated folders)
 # ---------------------------------------------------------------------------
 
 def build_dir(base_dir: Path, app: AppConfig, code: str) -> Path:
@@ -75,7 +75,7 @@ def build_dir(base_dir: Path, app: AppConfig, code: str) -> Path:
 
 
 def pick_package_name(files, candidates) -> str | None:
-    """Primeiro nome de `candidates` presente em `files` (comparação exata)."""
+    """First name from `candidates` present in `files` (exact comparison)."""
     available = set(files)
     return next((name for name in candidates if name in available), None)
 
@@ -109,7 +109,7 @@ def write_build_meta(folder: Path, code: str, info: dict, mdtm: str, size: int):
 
 
 def list_builds(base_dir: Path, app: AppConfig) -> list[dict]:
-    """Builds personalizadas instaladas (pastas com o executável principal)."""
+    """Installed custom builds (folders with the main executable)."""
     prefix = f"{app.install_dir} - build "
     builds = []
     try:
@@ -128,9 +128,9 @@ def list_builds(base_dir: Path, app: AppConfig) -> list[dict]:
 
 
 def carry_over_files(source_dir: Path | None, target_dir: Path, names) -> list[str]:
-    """Copia da instalação oficial os arquivos listados (ex.: configurações do usuário).
-
-    Retorna os nomes efetivamente copiados.
+    """Copies the listed files (e.g. user settings) from the official installation.
+    
+    Returns the names that were actually copied.
     """
     if source_dir is None or not Path(source_dir).is_dir():
         return []
@@ -146,7 +146,7 @@ def carry_over_files(source_dir: Path | None, target_dir: Path, names) -> list[s
 
 
 def install_package(zip_path: Path, dest: Path, clean: bool = False, on_progress=None):
-    """Extrai o pacote. `clean=True` apaga o destino antes (usado em builds)."""
+    """Extracts the package. `clean=True` wipes the destination first (used for builds)."""
     dest = Path(dest)
     if clean and dest.exists():
         shutil.rmtree(dest)
@@ -154,16 +154,16 @@ def install_package(zip_path: Path, dest: Path, clean: bool = False, on_progress
 
 
 # ---------------------------------------------------------------------------
-# Execução
+# Execution
 # ---------------------------------------------------------------------------
 
 def build_launch_env(app: AppConfig, option_values: dict, session: dict | None = None,
                      base_env: dict | None = None) -> dict:
-    """Ambiente do processo filho: herdado + `env` do app + opções + sessão.
-
-    - opções booleanas ligadas viram "1"; desligadas removem a variável;
-    - opções de texto vazias removem a variável (nada de valor obsoleto herdado);
-    - `session` mapeia nome da variável → valor (usuário/senha do login).
+    """Child process environment: inherited + the app's `env` + options + session.
+    
+    - enabled boolean options become "1"; disabled ones remove the variable;
+    - empty text options remove the variable (no stale inherited value);
+    - `session` maps variable name -> value (the login's user/password).
     """
     env = dict(os.environ if base_env is None else base_env)
     env.update(app.env)

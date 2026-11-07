@@ -1,8 +1,8 @@
-"""Login opcional antes de usar o launcher.
+"""Optional login before using the launcher.
 
-Com `auth.type = "http"`, o launcher envia `{"username", "password"}` por
-POST (JSON) para `auth.url`. A autenticação é aceita quando a resposta é
-2xx e — se configurado — contém o texto `auth.success_contains`.
+With `auth.type = "http"`, the launcher sends `{"username", "password"}` as a
+POST (JSON) to `auth.url`. Authentication is accepted when the response is
+2xx and — if configured — contains the text `auth.success_contains`.
 """
 
 from __future__ import annotations
@@ -29,17 +29,17 @@ def http_authenticate(auth: AuthConfig, user: str, password: str) -> bool:
 
 
 def make_authenticator(auth: AuthConfig):
-    """Função (user, password) -> bool para o tipo de login configurado."""
+    """Function (user, password) -> bool for the configured login type."""
     if auth.type == "http":
         return lambda user, password: http_authenticate(auth, user, password)
     return lambda user, password: True
 
 
 def resolve_startup_login(enabled, user, password, authenticate_fn):
-    """Decide se a abertura pode pular a tela de login.
-
-    Retorna `(skip_login, warning)`. `warning` só vem preenchido quando o
-    login automático foi tentado e falhou.
+    """Decides whether startup can skip the login screen.
+    
+    Returns `(skip_login, warning)`. `warning` is only filled in when automatic
+    login was attempted and failed.
     """
     user = (user or "").strip()
     if not enabled or not user or not password:
@@ -53,7 +53,7 @@ def resolve_startup_login(enabled, user, password, authenticate_fn):
 
 
 def session_env(auth: AuthConfig, user: str, password: str) -> dict:
-    """Variáveis que repassam a sessão autenticada ao aplicativo iniciado."""
+    """Variables that pass the authenticated session on to the launched application."""
     env = {}
     if auth.session_env_user:
         env[auth.session_env_user] = (user or "").strip()
@@ -62,7 +62,7 @@ def session_env(auth: AuthConfig, user: str, password: str) -> dict:
     return env
 
 
-# -- credenciais lembradas (cifradas com DPAPI no StateStore) ---------------
+# -- remembered credentials (encrypted with DPAPI in the StateStore) ---------
 
 def load_saved_login(store):
     """(user, password, remember)."""
@@ -85,7 +85,7 @@ def clear_login(store):
 
 
 def persist_session_if_auto_login(enabled, user, password, save_fn):
-    """Grava a sessão atual quando o login automático está ligado."""
+    """Saves the current session when automatic login is on."""
     user = (user or "").strip()
     if not enabled or not user or not password:
         return False

@@ -83,7 +83,7 @@ class DownloadsDialog(FramelessDialog):
 
         self._on_tab_changed(0)
 
-    # -- abas -------------------------------------------------------------
+    # -- tabs -------------------------------------------------------------
     def _tab(self):
         return self._tabs[self.tab_bar.currentIndex()]
 
@@ -155,7 +155,7 @@ class DownloadsDialog(FramelessDialog):
                             else tr("No files available in this tab."))
         self._update_buttons()
 
-    # -- seleção ----------------------------------------------------------
+    # -- selection --------------------------------------------------------
     def _items(self):
         return [self.tree.topLevelItem(i) for i in range(self.tree.topLevelItemCount())]
 
