@@ -1,6 +1,16 @@
 @echo off
-rem Gera dist\Launcher.exe. Copie o launcher_config.json para a mesma pasta do .exe.
-pip install -r requirements.txt pyinstaller || exit /b 1
-pyinstaller --noconfirm Launcher.spec || exit /b 1
+rem Builds dist\Launcher.exe. Copy launcher_config.json next to the .exe.
+rem Uses "python -m" so it works even if Python's Scripts folder is not on PATH.
+python -m pip install -r requirements.txt pyinstaller || goto :fail
+python -m PyInstaller --noconfirm Launcher.spec || goto :fail
 echo.
-echo Pronto: dist\Launcher.exe
+echo Done: dist\Launcher.exe
+goto :end
+
+:fail
+echo.
+echo Build FAILED (see the error above).
+
+:end
+rem Keep the window open when launched by double-click.
+pause

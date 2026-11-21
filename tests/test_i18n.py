@@ -61,7 +61,7 @@ class LanguageTests(unittest.TestCase):
         self.assertEqual(i18n.tr("Install"), "Install")
         i18n.set_language("pt-BR")
         self.assertEqual(i18n.tr("Install"), "Instalar")
-        self.assertEqual(i18n.tr("Build {code} installed.", code=7), "Build 7 instalada.")
+        self.assertEqual(i18n.tr("Open {name}", name="X"), "Abrir X")
         self.assertEqual(i18n.tr("Not in the catalogue {x}", x=1), "Not in the catalogue 1")
 
     def test_unknown_language_falls_back_to_english(self):

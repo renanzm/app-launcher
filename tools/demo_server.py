@@ -11,7 +11,6 @@ to publish a "new version" of the apps and test the update flow.
 
 import argparse
 import hashlib
-import json
 import sys
 import zipfile
 from pathlib import Path
@@ -48,17 +47,6 @@ def build_tree(version: str):
         "settings.ini": "[general]\ntheme=dark\n",
         "README.txt": f"Notes Studio {version}\n",
     })
-    build = ROOT / "apps" / "notes" / "custom-builds" / "12345"
-    _zip(build / "build.zip", {
-        "notes.bat": _APP_BAT.format(title="Notes Studio - build do ticket 12345"),
-        "settings.ini": "[general]\ntheme=light\n",
-    })
-    (build / "info.json").write_text(json.dumps({
-        "id": "2026-11-02-12345",
-        "description": "Fix for the autosave problem reported in ticket 12345.",
-        "base_version": version,
-        "date": "2026-11-02",
-    }, ensure_ascii=False, indent=2), encoding="utf-8")
 
     _zip(ROOT / "apps" / "reports" / "reports.zip", {
         "reports.bat": _APP_BAT.format(title=f"Reports Viewer {version}"),

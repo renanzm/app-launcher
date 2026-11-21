@@ -15,7 +15,6 @@ def make_config(**overrides):
                 {"key": "flag", "label": "Flag", "type": "bool", "env": "DEMO_FLAG"},
                 {"key": "name", "label": "Name", "type": "text", "env": "DEMO_NAME", "default": "x"},
             ],
-            "custom_builds": {"code_pattern": "^\\d{5}$", "carry_over_files": ["settings.ini"]},
         }],
     }
     data.update(overrides)

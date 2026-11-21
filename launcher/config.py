@@ -72,16 +72,6 @@ class ExtraAction:
 
 
 @dataclass(frozen=True)
-class CustomBuildsConfig:
-    remote_subdir: str = "custom-builds"
-    code_label: str = "Ticket"
-    code_pattern: str = r"^\d{4,10}$"
-    code_hint: str = ""              # empty -> translated default
-    package_names: tuple = ("build.zip", "dist.zip")
-    carry_over_files: tuple = ()     # copied from the official installation
-
-
-@dataclass(frozen=True)
 class AppConfig:
     id: str
     name: str
@@ -93,7 +83,6 @@ class AppConfig:
     env: dict = field(default_factory=dict)
     extra_actions: tuple = ()
     options: tuple = ()
-    custom_builds: CustomBuildsConfig | None = None
 
 
 @dataclass(frozen=True)
@@ -210,25 +199,6 @@ def _parse_option(data: dict, where: str) -> AppOption:
     )
 
 
-def _parse_custom_builds(data: dict | None) -> CustomBuildsConfig | None:
-    if not data:
-        return None
-    pattern = _str(data, "code_pattern", CustomBuildsConfig.code_pattern)
-    try:
-        re.compile(pattern)
-    except re.error as exc:
-        raise ConfigError(tr("custom_builds.code_pattern is invalid: {error}", error=exc)) from None
-    names = tuple(data.get("package_names") or CustomBuildsConfig.package_names)
-    return CustomBuildsConfig(
-        remote_subdir=_str(data, "remote_subdir", "custom-builds"),
-        code_label=_str(data, "code_label", "Ticket"),
-        code_pattern=pattern,
-        code_hint=_str(data, "code_hint", CustomBuildsConfig.code_hint),
-        package_names=names,
-        carry_over_files=tuple(data.get("carry_over_files") or ()),
-    )
-
-
 def _parse_app(data: dict, index: int) -> AppConfig:
     where = f"apps[{index}]"
     app_id = _require(data, "id", where)
@@ -260,7 +230,6 @@ def _parse_app(data: dict, index: int) -> AppConfig:
         env={str(k): str(v) for k, v in (data.get("env") or {}).items()},
         extra_actions=actions,
         options=options,
-        custom_builds=_parse_custom_builds(data.get("custom_builds")),
     )
 
 

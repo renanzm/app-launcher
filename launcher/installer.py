@@ -1,21 +1,16 @@
-"""Local installation: safe extraction, custom builds and the launch environment."""
+"""Local installation: safe extraction and the launch environment."""
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
 import subprocess
 import zipfile
-from datetime import datetime
 from pathlib import Path
 
 from .config import AppConfig
 from .i18n import tr
-
-# Metadata written inside each custom build's folder.
-BUILD_META_FILE = ".launcher-build.json"
 
 
 # ---------------------------------------------------------------------------
@@ -66,91 +61,9 @@ def count_files(folder: Path) -> int:
     return sum(1 for p in folder.rglob("*") if p.is_file())
 
 
-# ---------------------------------------------------------------------------
-# Custom builds (per-ticket deliveries, in isolated folders)
-# ---------------------------------------------------------------------------
-
-def build_dir(base_dir: Path, app: AppConfig, code: str) -> Path:
-    return Path(base_dir) / f"{app.install_dir} - build {code}"
-
-
-def pick_package_name(files, candidates) -> str | None:
-    """First name from `candidates` present in `files` (exact comparison)."""
-    available = set(files)
-    return next((name for name in candidates if name in available), None)
-
-
-def is_valid_code(code: str, pattern: str) -> bool:
-    return bool(code) and re.fullmatch(pattern, code) is not None
-
-
-def read_build_meta(folder: Path) -> dict | None:
-    try:
-        data = json.loads((Path(folder) / BUILD_META_FILE).read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except (OSError, ValueError):
-        return None
-
-
-def write_build_meta(folder: Path, code: str, info: dict, mdtm: str, size: int):
-    meta = {
-        "code": code,
-        "id": info.get("id", ""),
-        "description": info.get("description", ""),
-        "base_version": info.get("base_version", ""),
-        "date": info.get("date", ""),
-        "mdtm": mdtm,
-        "size": size,
-        "installed_at": datetime.now().isoformat(timespec="seconds"),
-    }
-    (Path(folder) / BUILD_META_FILE).write_text(
-        json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-
-
-def list_builds(base_dir: Path, app: AppConfig) -> list[dict]:
-    """Installed custom builds (folders with the main executable)."""
-    prefix = f"{app.install_dir} - build "
-    builds = []
-    try:
-        children = sorted(Path(base_dir).iterdir(), key=lambda p: p.name.lower())
-    except OSError:
-        return builds
-    for child in children:
-        if not (child.is_dir() and child.name.startswith(prefix)):
-            continue
-        if not (child / app.executable).is_file():
-            continue
-        meta = read_build_meta(child) or {}
-        builds.append({**meta, "code": meta.get("code") or child.name[len(prefix):],
-                       "folder": str(child)})
-    return builds
-
-
-def carry_over_files(source_dir: Path | None, target_dir: Path, names) -> list[str]:
-    """Copies the listed files (e.g. user settings) from the official installation.
-    
-    Returns the names that were actually copied.
-    """
-    if source_dir is None or not Path(source_dir).is_dir():
-        return []
-    copied = []
-    for name in names:
-        source = Path(source_dir) / name
-        if source.is_file():
-            target = Path(target_dir) / name
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(source, target)
-            copied.append(name)
-    return copied
-
-
-def install_package(zip_path: Path, dest: Path, clean: bool = False, on_progress=None):
-    """Extracts the package. `clean=True` wipes the destination first (used for builds)."""
-    dest = Path(dest)
-    if clean and dest.exists():
-        shutil.rmtree(dest)
-    safe_extract_zip(zip_path, dest, on_progress=on_progress)
+def install_package(zip_path: Path, dest: Path, on_progress=None):
+    """Extracts the package into `dest`."""
+    safe_extract_zip(zip_path, Path(dest), on_progress=on_progress)
 
 
 # ---------------------------------------------------------------------------

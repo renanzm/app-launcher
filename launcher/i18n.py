@@ -6,7 +6,7 @@ translation; a missing entry falls back to the English text, so a partial
 catalogue never breaks the interface.
 
     tr("Install")                         -> "Instalar" (pt-BR)
-    tr("Build {code} installed.", code=1) -> "Build 1 instalada." (pt-BR)
+    tr("Open {name}", name="X") -> "Abrir X" (pt-BR)
 """
 
 from __future__ import annotations

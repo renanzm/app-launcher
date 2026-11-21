@@ -8,7 +8,6 @@ Feito em Python + PyQt6, com interface escura, cor de destaque configurável e t
 
 <p align="center">
   <img src="docs/screenshots/pt-BR/main.png" width="360" alt="Janela principal">
-  <img src="docs/screenshots/pt-BR/custom-build.png" width="360" alt="Build personalizada">
 </p>
 
 ## Funcionalidades
@@ -20,7 +19,6 @@ Feito em Python + PyQt6, com interface escura, cor de destaque configurável e t
 - **Atualização automática** do aplicativo selecionado e do próprio launcher (troca do `.exe` via script, com verificação na reabertura).
 - **Opções por aplicativo** declaradas na configuração (liga/desliga, texto ou senha) que viram variáveis de ambiente do processo iniciado.
 - **Ações extras**: botões para outros executáveis do mesmo pacote.
-- **Builds personalizadas por ticket**: o suporte publica uma versão específica para um chamado; o usuário digita o código e ela é instalada numa pasta isolada, sem tocar na instalação oficial. Arquivos do usuário (ex.: configurações) podem ser copiados da instalação oficial.
 - **Downloads avulsos** em abas (ferramentas, instaladores…), com seleção múltipla.
 - **Login opcional** via HTTP, com "lembrar dados" e entrada automática.
 - **Verificar integridade**, **abrir pasta de instalação** e **desinstalar**.
@@ -53,7 +51,7 @@ E abra o launcher em outro:
 python -m launcher
 ```
 
-Sem um `launcher_config.json`, o launcher usa o [`launcher_config.example.json`](launcher_config.example.json), que aponta para o servidor de demonstração. Para simular uma versão nova publicada, reinicie o servidor com `python -m tools.demo_server --bump`. O código `12345` instala a build personalizada de exemplo.
+Sem um `launcher_config.json`, o launcher usa o [`launcher_config.example.json`](launcher_config.example.json), que aponta para o servidor de demonstração. Para simular uma versão nova publicada, reinicie o servidor com `python -m tools.demo_server --bump`.
 
 ## Idioma
 
@@ -75,7 +73,7 @@ Copie `launcher_config.example.json` para `launcher_config.json` (na pasta do `L
 | `app_name`, `app_id` | Nome exibido e identificador usado na pasta de estado (`%LOCALAPPDATA%\<app_id>`). |
 | `accent_color` | Cor de destaque da interface (`#RRGGBB`). |
 | `language` | `auto` (padrão), `en` ou `pt-BR`. |
-| `support_url` | Página aberta em *Ajuda → Reportar um problema*. |
+| `support_url` | Página aberta pelo botão *Relatar um bug* na barra de título (o botão fica oculto se vazio). |
 | `server` | `protocol` (`ftp`/`ftps`), `host`, `port`, `user`, `password` **ou** `password_enc` + `secret`, `credentials_url`, `encoding`, `timeout`. |
 | `auth` | `type: "none"` ou `"http"` (`url`, `title`, `user_label`, `success_contains`, `session_env`). |
 | `self_update` | `remote_dir` e `file_name` do `Launcher.exe` publicado. |
@@ -98,20 +96,13 @@ Cada item de `apps`:
   "options": [
     { "key": "verbose", "label": "Modo detalhado", "type": "bool", "env": "NOTES_VERBOSE" },
     { "key": "token", "label": "Token da API", "type": "password", "env": "NOTES_TOKEN" }
-  ],
-  "custom_builds": {
-    "remote_subdir": "custom-builds",
-    "code_label": "Ticket",
-    "code_pattern": "^\\d{5}$",
-    "package_names": ["build.zip", "dist.zip"],
-    "carry_over_files": ["settings.ini"]
-  }
+  ]
 }
 ```
 
 Opções `bool` ligadas viram `"1"` e desligadas removem a variável; opções de texto vazias também removem a variável, para o aplicativo nunca herdar um valor antigo do ambiente. Opções `password` são guardadas cifradas.
 
-Os textos que vêm da configuração (nomes de aplicativos, rótulos de opções, `auth.title`, `custom_builds.code_hint`…) aparecem exatamente como foram escritos, no idioma em que você os escreveu. Quando `auth.title`, `auth.user_label` ou `custom_builds.code_hint` são omitidos, o launcher usa padrões já traduzidos.
+Os textos que vêm da configuração (nomes de aplicativos, rótulos de opções, `auth.title`…) aparecem exatamente como foram escritos, no idioma em que você os escreveu. Quando `auth.title` ou `auth.user_label` são omitidos, o launcher usa padrões já traduzidos.
 
 ### Login HTTP
 
@@ -143,10 +134,6 @@ Com `server.credentials_url`, as credenciais (`host`, `port`, `user`, `password`
 /apps/notes/
     notes.zip                 ← pacote oficial (package)
     notes.zip.sha256          ← opcional: hash verificado no download
-    custom-builds/
-        12345/                ← código do ticket
-            build.zip         ← primeiro nome de package_names encontrado
-            info.json         ← opcional: id, description, base_version, date
 /launcher/
     Launcher.exe              ← publicado para a auto-atualização
 ```
@@ -155,7 +142,7 @@ Para gerar o `.sha256`: `certutil -hashfile notes.zip SHA256` ou `sha256sum note
 
 ## Onde ficam os dados
 
-- **Aplicativos instalados**: na pasta do launcher (`<install_dir>`); builds personalizadas em `<install_dir> - build <código>`.
+- **Aplicativos instalados**: na pasta do launcher (`<install_dir>`).
 - **Estado** (preferências, versões instaladas, opções): `%LOCALAPPDATA%\<app_id>\state.json`. Senha lembrada, opções do tipo senha e credenciais em cache ficam cifradas com DPAPI — só o mesmo usuário do Windows consegue lê-las.
 
 ## Arquitetura
@@ -164,7 +151,7 @@ Para gerar o `.sha256`: `certutil -hashfile notes.zip SHA256` ou `sha256sum note
 launcher/
   config.py        leitura e validação do launcher_config.json
   remote.py        FTP/FTPS, credenciais, listagem, download com verificação
-  installer.py     extração segura, builds isoladas, ambiente de execução
+  installer.py     extração segura, ambiente de execução
   auth.py          login opcional e credenciais lembradas
   self_update.py   troca do próprio .exe
   state.py         estado em JSON + DPAPI

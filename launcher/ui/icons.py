@@ -146,20 +146,18 @@ def _trash(p: QPainter, c: QColor):
     p.drawPath(path)
 
 
-def _wrench(p: QPainter, c: QColor):
+def _bug(p: QPainter, c: QColor):
     p.setPen(_pen(c))
-    path = QPainterPath(QPointF(14.5, 4.2))
-    path.cubicTo(QPointF(11.5, 3.6), QPointF(9, 6.6), QPointF(10.2, 9.6))
-    path.lineTo(4.6, 15.2)
-    path.cubicTo(QPointF(3.6, 16.2), QPointF(3.6, 18.4), QPointF(4.8, 19.4))
-    path.cubicTo(QPointF(5.8, 20.4), QPointF(7.8, 20.4), QPointF(8.8, 19.4))
-    path.lineTo(14.4, 13.8)
-    path.cubicTo(QPointF(17.4, 15), QPointF(20.4, 12.5), QPointF(19.8, 9.5))
-    path.lineTo(17, 12.3)
-    path.lineTo(14.2, 11.6)
-    path.lineTo(13.5, 8.8)
-    path.closeSubpath()
+    p.drawRoundedRect(QRectF(7.5, 8.5, 9, 11), 4.5, 4.5)        # body
+    p.drawLine(QPointF(12, 9), QPointF(12, 19.5))
+    path = QPainterPath(QPointF(9, 8.5))                          # head
+    path.cubicTo(QPointF(9, 4.5), QPointF(15, 4.5), QPointF(15, 8.5))
     p.drawPath(path)
+    p.drawLine(QPointF(10, 5.6), QPointF(8.3, 3.6))               # antennae
+    p.drawLine(QPointF(14, 5.6), QPointF(15.7, 3.6))
+    for y, dx in ((11.5, 3), (14.5, 3.4), (17.5, 3)):             # legs
+        p.drawLine(QPointF(7.5, y), QPointF(7.5 - dx, y - 0.8))
+        p.drawLine(QPointF(16.5, y), QPointF(16.5 + dx, y - 0.8))
 
 
 def _chevron_down(p: QPainter, c: QColor):
@@ -195,7 +193,7 @@ _PAINTERS = {
     "settings": _settings, "download": _download, "help": _help,
     "minimize": _minimize, "close": _close, "play": _play, "refresh": _refresh,
     "more": _more, "folder": _folder, "box": _box, "shield": _shield,
-    "trash": _trash, "wrench": _wrench, "chevron-down": _chevron_down,
+    "trash": _trash, "bug": _bug, "chevron-down": _chevron_down,
     "check": _check, "user": _user, "lock": _lock,
 }
 

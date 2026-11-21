@@ -33,17 +33,6 @@ class SafeExtractTests(unittest.TestCase):
                     installer.safe_extract_zip(z, Path(tmp) / "out")
                 self.assertFalse((Path(tmp) / "evil.txt").exists())
 
-    def test_clean_install_removes_old_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            dest = Path(tmp) / "out"
-            dest.mkdir()
-            (dest / "old.txt").write_text("old")
-            z = Path(tmp) / "a.zip"
-            _make_zip(z, {"new.txt": b"n"})
-            installer.install_package(z, dest, clean=True)
-            self.assertFalse((dest / "old.txt").exists())
-            self.assertTrue((dest / "new.txt").exists())
-
     def test_update_keeps_user_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / "out"
@@ -53,54 +42,6 @@ class SafeExtractTests(unittest.TestCase):
             _make_zip(z, {"app.exe": b"n"})
             installer.install_package(z, dest)
             self.assertEqual((dest / "user.cfg").read_text(), "mine")
-
-
-class CustomBuildTests(unittest.TestCase):
-    def setUp(self):
-        self.app = make_config().apps[0]
-
-    def test_pick_package_respects_priority(self):
-        self.assertEqual(installer.pick_package_name(["dist.zip", "build.zip"], ("build.zip", "dist.zip")),
-                         "build.zip")
-        self.assertEqual(installer.pick_package_name(["dist.zip"], ("build.zip", "dist.zip")), "dist.zip")
-        self.assertIsNone(installer.pick_package_name(["Build.zip"], ("build.zip",)))
-
-    def test_code_validation(self):
-        pattern = self.app.custom_builds.code_pattern
-        self.assertTrue(installer.is_valid_code("12345", pattern))
-        self.assertFalse(installer.is_valid_code("1234", pattern))
-        self.assertFalse(installer.is_valid_code("12345a", pattern))
-        self.assertFalse(installer.is_valid_code("", pattern))
-
-    def test_list_builds_requires_executable_and_reads_meta(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            good = installer.build_dir(base, self.app, "11111")
-            good.mkdir()
-            (good / self.app.executable).write_bytes(b"x")
-            installer.write_build_meta(good, "11111", {"description": "fix"}, "20260101000000", 10)
-            broken = installer.build_dir(base, self.app, "22222")
-            broken.mkdir()
-            builds = installer.list_builds(base, self.app)
-            self.assertEqual([b["code"] for b in builds], ["11111"])
-            self.assertEqual(builds[0]["description"], "fix")
-
-    def test_carry_over_copies_only_existing_files(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            official = Path(tmp) / "official"
-            official.mkdir()
-            (official / "settings.ini").write_text("user")
-            target = Path(tmp) / "build"
-            target.mkdir()
-            (target / "settings.ini").write_text("default")
-            copied = installer.carry_over_files(official, target, ["settings.ini", "missing.txt"])
-            self.assertEqual(copied, ["settings.ini"])
-            self.assertEqual((target / "settings.ini").read_text(), "user")
-
-    def test_carry_over_without_official_install(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            self.assertEqual(installer.carry_over_files(None, Path(tmp), ["a"]), [])
-            self.assertEqual(installer.carry_over_files(Path(tmp) / "nope", Path(tmp), ["a"]), [])
 
 
 class LaunchEnvTests(unittest.TestCase):

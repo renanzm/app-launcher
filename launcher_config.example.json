@@ -40,15 +40,7 @@
           "description": "Shows extra messages on startup." },
         { "key": "workspace", "label": "Default workspace folder", "type": "text", "env": "NOTES_WORKSPACE",
           "default": "C:\\Notes" }
-      ],
-      "custom_builds": {
-        "remote_subdir": "custom-builds",
-        "code_label": "Ticket",
-        "code_pattern": "^\\d{5}$",
-        "code_hint": "Enter the ticket number provided by support (5 digits).",
-        "package_names": ["build.zip", "dist.zip"],
-        "carry_over_files": ["settings.ini"]
-      }
+      ]
     },
     {
       "id": "reports",

@@ -16,7 +16,7 @@ class ParseConfigTests(unittest.TestCase):
     def test_example_config_is_valid(self):
         config = load_config(ROOT / EXAMPLE_CONFIG_FILE_NAME)
         self.assertGreaterEqual(len(config.apps), 1)
-        self.assertTrue(config.app("notes").custom_builds)
+        self.assertTrue(config.app("notes").options)
 
     def test_defaults(self):
         config = make_config()

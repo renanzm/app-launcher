@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import sys
@@ -18,7 +17,6 @@ from PyQt6.QtWidgets import (
 from .. import __version__, auth, installer, remote, self_update
 from ..i18n import tr
 from . import icons, messages, theme
-from .builds import BuildCodeDialog, BuildInfoDialog, HelpMenuDialog, InstalledBuildsDialog
 from .downloads import DownloadsDialog
 from .settings import SettingsDialog
 from .widgets import FramelessWindow, Task, VersionTile, divider, icon_button, label
@@ -44,19 +42,20 @@ class MainWindow(FramelessWindow):
         pal = theme.palette()
 
         # -- title bar ----------------------------------------------------
-        self.btn_help = icon_button("help", tr("Help and support"))
+        self.btn_report = icon_button("bug", tr("Report a bug"))
         self.btn_downloads = icon_button("box", tr("Downloads"))
         self.btn_settings = icon_button("settings", tr("Settings"))
         btn_min = icon_button("minimize", tr("Minimize"), size=16)
         btn_close = icon_button("close", tr("Close"), "CloseButton", 16)
-        for b in (self.btn_help, self.btn_downloads, self.btn_settings, btn_min, btn_close):
+        for b in (self.btn_report, self.btn_downloads, self.btn_settings, btn_min, btn_close):
             self.title_bar.add_button(b)
         btn_min.clicked.connect(self.showMinimized)
         btn_close.clicked.connect(self.close)
-        self.btn_help.clicked.connect(self._open_help)
+        self.btn_report.clicked.connect(self._report_bug)
         self.btn_downloads.clicked.connect(self._open_downloads)
         self.btn_settings.clicked.connect(self._open_settings)
         self.btn_downloads.setVisible(bool(config.downloads))
+        self.btn_report.setVisible(bool(config.support_url))
 
         # -- application selector --------------------------------------------
         self.body.addWidget(label(tr("APPLICATION"), "overline"))
@@ -101,11 +100,6 @@ class MainWindow(FramelessWindow):
         self.extra_box.setSpacing(8)
         self.body.addLayout(self.extra_box)
         self._extra_buttons: list[QPushButton] = []
-
-        self.btn_builds = QPushButton()
-        self.btn_builds.setIcon(icons.icon("wrench", pal.muted, 16))
-        self.btn_builds.clicked.connect(self._open_installed_builds)
-        self.body.addWidget(self.btn_builds)
 
         update_row = QHBoxLayout()
         update_row.setSpacing(0)
@@ -171,10 +165,6 @@ class MainWindow(FramelessWindow):
 
         self.btn_open.setText(tr("Open {name}", name=app.name))
         self._rebuild_extra_buttons()
-        builds = installer.list_builds(self.base_dir, app) if app.custom_builds else []
-        self.btn_builds.setText(tr("Custom builds ({count})", count=len(builds)))
-        self.btn_builds.setVisible(bool(builds))
-        self.btn_help.setVisible(bool(self.config.support_url or app.custom_builds))
 
         if self._pending is not None:
             self.btn_update.setText(tr("Install update") if installed else tr("Install"))
@@ -234,8 +224,8 @@ class MainWindow(FramelessWindow):
         self.btn_open.setEnabled(idle and installed)
         for btn in self._extra_buttons:
             btn.setEnabled(idle and installed)
-        for w in (self.combo, self.btn_update, self.btn_more, self.btn_builds,
-                  self.btn_help, self.btn_downloads, self.btn_settings):
+        for w in (self.combo, self.btn_update, self.btn_more,
+                  self.btn_report, self.btn_downloads, self.btn_settings):
             w.setEnabled(idle)
 
     def _set_busy(self, busy: bool, status: str | None = None):
@@ -358,7 +348,6 @@ class MainWindow(FramelessWindow):
         folder = self._install_dir()
         exe = folder / app.executable
         record = self.store.install_record(app.id)
-        builds = installer.list_builds(self.base_dir, app) if app.custom_builds else []
         pal = theme.palette()
 
         def line(ok: bool, text: str, detail: str):
@@ -376,8 +365,6 @@ class MainWindow(FramelessWindow):
                  remote.format_mdtm(record[0]) if record else tr("missing")),
             "&nbsp;&nbsp;&nbsp; " + tr("Files in folder: <b>{count}</b>", count=installer.count_files(folder)),
         ]
-        if app.custom_builds:
-            rows.append("&nbsp;&nbsp;&nbsp; " + tr("Custom builds: <b>{count}</b>", count=len(builds)))
         messages.info(self, tr("Integrity check"), f"<b>{app.name}</b><br><br>" + "<br>".join(rows))
 
     def _uninstall(self):
@@ -385,8 +372,7 @@ class MainWindow(FramelessWindow):
         folder = self._install_dir()
         if not messages.confirm(
             self, tr("Uninstall"),
-            tr("Uninstall <b>{name}</b>?<br><br>All files in<br><i>{path}</i><br>will be deleted. "
-               "Custom builds are not affected.", name=app.name, path=messages.path_html(folder)),
+            tr("Uninstall <b>{name}</b>?<br><br>All files in<br><i>{path}</i><br>will be deleted.", name=app.name, path=messages.path_html(folder)),
             confirm_label=tr("Uninstall"), danger=True,
         ):
             return
@@ -411,8 +397,8 @@ class MainWindow(FramelessWindow):
     def _launch_main(self):
         self._launch(self.app.executable)
 
-    def _launch(self, executable: str, folder: Path | None = None):
-        path = (folder or self._install_dir()) / executable
+    def _launch(self, executable: str):
+        path = self._install_dir() / executable
         try:
             installer.launch(path, self._launch_env())
         except Exception as exc:  # noqa: BLE001
@@ -437,117 +423,8 @@ class MainWindow(FramelessWindow):
     def _open_downloads(self):
         DownloadsDialog(self.config.downloads, self.server, self.base_dir, self).exec()
 
-    def _open_help(self):
-        app = self.app
-        has_builds = bool(app.custom_builds and installer.list_builds(self.base_dir, app))
-        dlg = HelpMenuDialog(app, self.config.support_url, has_builds, self)
-        if not dlg.exec():
-            return
-        if dlg.choice == "report":
-            webbrowser.open(self.config.support_url)
-        elif dlg.choice == "install":
-            self._ask_build_code()
-        elif dlg.choice == "manage":
-            self._open_installed_builds()
-
-    # ------------------------------------------------------------------
-    # Custom builds
-    # ------------------------------------------------------------------
-
-    def _ask_build_code(self):
-        app = self.app
-        cb = app.custom_builds
-        dlg = BuildCodeDialog(cb, self)
-        if not dlg.exec():
-            return
-        code = dlg.code
-        self._set_busy(True, tr("Looking for build {code}…", code=code))
-
-        def work(ctx):
-            with self.server.connect() as ftp:
-                if not remote.try_cwd(ftp, f"{app.remote_dir.rstrip('/')}/{cb.remote_subdir}/{code}"):
-                    return None
-                files = [name.rsplit("/", 1)[-1] for name in ftp.nlst()]
-                package = installer.pick_package_name(files, cb.package_names)
-                if package is None:
-                    return None
-                text = remote.read_text(ftp, "info.json") if "info.json" in files else None
-                info = json.loads(text) if text else {}
-                return (info if isinstance(info, dict) else {}), remote.stat(ftp, package)
-
-        def done(result):
-            self._set_busy(False)
-            self._refresh()
-            if result is None:
-                messages.info(self, tr("Custom build"),
-                              tr("No build found for <b>{label} {code}</b>.<br><br>"
-                                 "Check the code and try again.", label=cb.code_label, code=code))
-                return
-            info, rf = result
-            existing = installer.read_build_meta(installer.build_dir(self.base_dir, app, code)) or {}
-            if BuildInfoDialog(app, code, info, existing.get("id", ""), self).exec():
-                self._install_build(code, info, rf)
-
-        Task.start_new(self, work, done, lambda exc: self._fail(tr("Custom build"), exc),
-                       on_status=self.status.setText)
-
-    def _install_build(self, code: str, info: dict, rf: remote.RemoteFile):
-        app = self.app
-        cb = app.custom_builds
-        target = installer.build_dir(self.base_dir, app, code)
-        official = self._install_dir() if self._install_dir().is_dir() else None
-        temp_zip = self.base_dir / _TEMP_DIR_NAME / f"{app.id}-build-{code}.zip"
-        self._set_busy(True, tr("Downloading build {code}…", code=code))
-
-        def work(ctx):
-            with self.server.connect() as ftp:
-                ftp.cwd(f"{app.remote_dir.rstrip('/')}/{cb.remote_subdir}/{code}")
-                remote.download(ftp, rf.name, temp_zip, rf.size, on_progress=ctx.progress)
-            ctx.status(tr("Installing…"))
-            ctx.progress(0)
-            try:
-                installer.install_package(temp_zip, target, clean=True, on_progress=ctx.progress)
-            finally:
-                temp_zip.unlink(missing_ok=True)
-            copied = installer.carry_over_files(official, target, cb.carry_over_files)
-            installer.write_build_meta(target, code, info, rf.mdtm, rf.size)
-            return copied
-
-        def done(copied):
-            self._set_busy(False)
-            self.progress.setValue(100)
-            self._refresh(tr("Build {code} installed.", code=code))
-            note = ""
-            if copied:
-                note = "<br><br>" + tr("Copied from the official installation: {files}",
-                                       files=", ".join(f"<b>{c}</b>" for c in copied))
-            messages.success(self, tr("Build installed"),
-                             tr("Build <b>{code}</b> was installed in a separate folder.<br>"
-                                "Open it from <b>Custom builds</b>.", code=code) + note)
-
-        Task.start_new(self, work, done, lambda exc: self._fail(tr("Custom build"), exc),
-                       on_progress=self.progress.setValue, on_status=self.status.setText)
-
-    def _open_installed_builds(self):
-        app = self.app
-        builds = installer.list_builds(self.base_dir, app)
-        if not builds:
-            self._refresh()
-            return
-
-        def remove(build) -> bool:
-            try:
-                shutil.rmtree(build["folder"])
-                return True
-            except OSError as exc:
-                messages.error(self, tr("Remove build"), messages.describe(exc))
-                return False
-
-        dlg = InstalledBuildsDialog(app, builds, remove, self)
-        accepted = dlg.exec()
-        self._refresh()
-        if accepted and dlg.selected:
-            self._launch(app.executable, Path(dlg.selected["folder"]))
+    def _report_bug(self):
+        webbrowser.open(self.config.support_url)
 
     # ------------------------------------------------------------------
     # Startup: self-update of the launcher and the app

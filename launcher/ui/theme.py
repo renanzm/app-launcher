@@ -120,10 +120,6 @@ def stylesheet(pal: Palette, assets: dict) -> str:
         background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 12px;
     }}
     QFrame[role="divider"] {{ background: {pal.border}; max-height: 1px; min-height: 1px; border: none; }}
-    QFrame[role="option-card"] {{
-        background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 12px;
-    }}
-    QFrame[role="option-card"]:hover {{ border-color: {pal.accent}; background: {pal.surface_2}; }}
 
     QPushButton {{
         background: {pal.surface_2}; border: 1px solid {pal.border};

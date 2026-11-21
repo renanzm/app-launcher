@@ -16,7 +16,6 @@ STRINGS = {
     "Configure at least one application in 'apps'.": "Configure ao menos um aplicativo em 'apps'.",
     "Some applications share the same 'id'.": "Há aplicativos com o mesmo 'id'.",
     "accent_color must be in the #RRGGBB format.": "accent_color deve estar no formato #RRGGBB.",
-    "custom_builds.code_pattern is invalid: {error}": "custom_builds.code_pattern inválido: {error}",
     "Could not read {path}: {error}": "Não foi possível ler {path}: {error}",
     "Invalid JSON in {name} (line {line}, column {column}): {error}":
         "JSON inválido em {name} (linha {line}, coluna {column}): {error}",
@@ -54,21 +53,18 @@ STRINGS = {
     "Install": "Instalar",
     "Update": "Atualizar",
     "Not now": "Agora não",
-    "Open": "Abrir",
-    "Remove": "Remover",
     "Replace": "Substituir",
 
     # -- main window --------------------------------------------------------------
     "Settings": "Configurações",
     "Downloads": "Downloads",
-    "Help and support": "Ajuda e suporte",
+    "Report a bug": "Relatar um bug",
     "APPLICATION": "APLICATIVO",
     "Installed": "Instalado",
     "Available": "Disponível",
     "Check for updates": "Verificar atualizações",
     "More options": "Mais opções",
     "Open {name}": "Abrir {name}",
-    "Custom builds ({count})": "Builds personalizadas ({count})",
     "Install update": "Instalar atualização",
     "Not installed. Use “Check for updates” to install.":
         "Não instalado. Use “Verificar atualizações” para instalar.",
@@ -96,12 +92,9 @@ STRINGS = {
     "Executable <i>{name}</i>": "Executável <i>{name}</i>",
     "Version record": "Registro da versão",
     "Files in folder: <b>{count}</b>": "Arquivos na pasta: <b>{count}</b>",
-    "Custom builds: <b>{count}</b>": "Builds personalizadas: <b>{count}</b>",
     "Integrity check": "Verificação de integridade",
-    "Uninstall <b>{name}</b>?<br><br>All files in<br><i>{path}</i><br>will be deleted. "
-    "Custom builds are not affected.":
-        "Desinstalar <b>{name}</b>?<br><br>Todos os arquivos em<br><i>{path}</i><br>serão apagados. "
-        "Builds personalizadas não são afetadas.",
+    "Uninstall <b>{name}</b>?<br><br>All files in<br><i>{path}</i><br>will be deleted.":
+        "Desinstalar <b>{name}</b>?<br><br>Todos os arquivos em<br><i>{path}</i><br>serão apagados.",
     "Could not remove the files:<br>{error}": "Não foi possível remover os arquivos:<br>{error}",
     "{name} was uninstalled.": "{name} foi desinstalado.",
     "Open application": "Abrir aplicativo",
@@ -124,46 +117,6 @@ STRINGS = {
         "Atualizar agora? O launcher será reiniciado.",
     "Downloading the new launcher version…": "Baixando a nova versão do launcher…",
     "Restarting to apply the update…": "Reiniciando para aplicar a atualização…",
-
-    # -- custom builds ------------------------------------------------------------
-    "Custom build": "Build personalizada",
-    "Build": "Build",
-    "Build installed": "Build instalada",
-    "Installed builds": "Builds instaladas",
-    "Looking for build {code}…": "Procurando a build {code}…",
-    "Downloading build {code}…": "Baixando a build {code}…",
-    "Build {code} installed.": "Build {code} instalada.",
-    "No build found for <b>{label} {code}</b>.<br><br>Check the code and try again.":
-        "Nenhuma build encontrada para <b>{label} {code}</b>.<br><br>Confira o código e tente de novo.",
-    "Copied from the official installation: {files}": "Copiado da instalação oficial: {files}",
-    "Build <b>{code}</b> was installed in a separate folder.<br>Open it from <b>Custom builds</b>.":
-        "A build <b>{code}</b> foi instalada numa pasta separada.<br>Abra-a em <b>Builds personalizadas</b>.",
-    "How can we help?": "Como podemos ajudar?",
-    "Report a problem": "Reportar um problema",
-    "Opens the support page in the browser.": "Abre a página de suporte no navegador.",
-    "Install custom build": "Instalar build personalizada",
-    "Downloads the version prepared for a specific {label}, without touching the official installation.":
-        "Baixa a versão preparada para um {label} específico, sem mexer na instalação oficial.",
-    "Opens or removes this application's custom builds.":
-        "Abre ou remove as builds personalizadas deste aplicativo.",
-    "{label} code": "Código do {label}",
-    "Enter the code provided by support.": "Informe o código fornecido pelo suporte.",
-    "Search": "Buscar",
-    "Date": "Data",
-    "Base version": "Versão base",
-    "Identifier": "Identificador",
-    "No description.": "Sem descrição.",
-    "A build is already installed for this code (<i>{id}</i>). Installing again replaces that folder.":
-        "Já existe uma build instalada para este código (<i>{id}</i>). Instalar de novo substitui essa pasta.",
-    "The build is installed in a <b>separate folder</b>, without affecting the official installation "
-    "or other builds.":
-        "A build é instalada numa <b>pasta separada</b>, sem afetar a instalação oficial nem outras builds.",
-    "Choose the build you want to open.": "Escolha a build que deseja abrir.",
-    "Remove build": "Remover build",
-    "Remove build <b>{code}</b>?<br><br>The files in that folder will be deleted. "
-    "Other builds are not affected.":
-        "Remover a build <b>{code}</b>?<br><br>Os arquivos dessa pasta serão apagados. "
-        "As demais builds não são afetadas.",
 
     # -- downloads ----------------------------------------------------------------
     "Select all": "Marcar todos",
