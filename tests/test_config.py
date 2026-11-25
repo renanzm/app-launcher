@@ -16,7 +16,40 @@ class ParseConfigTests(unittest.TestCase):
     def test_example_config_is_valid(self):
         config = load_config(ROOT / EXAMPLE_CONFIG_FILE_NAME)
         self.assertGreaterEqual(len(config.apps), 1)
+        self.assertTrue(all(app.source == "github" for app in config.apps))
+        self.assertIsNone(config.server, "GitHub-only configurations need no FTP server")
+        self.assertEqual(config.self_update.source, "github")
+
+    def test_ftp_demo_config_is_valid(self):
+        config = load_config(ROOT / "tools" / "demo_config.json")
         self.assertTrue(config.app("notes").options)
+        self.assertEqual(config.app("notes").source, "ftp")
+        self.assertIsNotNone(config.server)
+
+    def test_github_app(self):
+        config = make_config(apps=[{"id": "x", "name": "X", "github": "https://github.com/Owner/Repo.git/",
+                                    "asset": "*.zip", "accent_color": "#112233",
+                                    "description": {"en": "Hi", "pt-BR": "Oi"},
+                                    "links": [{"label": "Docs", "url": "https://d"}]}])
+        app = config.apps[0]
+        self.assertEqual((app.github, app.source, app.executable), ("Owner/Repo", "github", ""))
+        self.assertEqual(app.description, {"en": "Hi", "pt-BR": "Oi"})
+        self.assertEqual(app.links[0].url, "https://d")
+
+    def test_rejects_bad_github_values(self):
+        for bad in ({"github": "not a repo"}, {"github": "o/r", "accent_color": "red"},
+                    {"github": "o/r", "executable": "../evil.exe"},
+                    {"github": "o/r", "install_dir": "C:/Windows"}):
+            with self.subTest(bad=bad), self.assertRaises(ConfigError):
+                make_config(apps=[{"id": "x", "name": "X", **bad}])
+
+    def test_server_required_only_for_ftp(self):
+        with self.assertRaises(ConfigError):
+            parse_config({"apps": [{"id": "a", "name": "A", "remote_dir": "/", "package": "a.zip",
+                                    "executable": "a.exe"}]})
+        config = parse_config({"apps": [{"id": "a", "name": "A", "github": "o/r"}],
+                               "self_update": {"github": "o/launcher"}})
+        self.assertIsNone(config.server)
 
     def test_defaults(self):
         config = make_config()

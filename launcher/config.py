@@ -1,8 +1,14 @@
 """Reading and validating `launcher_config.json`.
 
-Everything environment-specific (server, applications, options that become
-environment variables, standalone downloads, login) lives in the configuration
-file. The launcher code knows no particular product.
+Everything environment-specific (where applications come from, options that
+become environment variables, standalone downloads, login) lives in the
+configuration file. The launcher code knows no particular product.
+
+An application comes from one of two sources:
+
+- **GitHub** (`"github": "owner/repo"`): the latest release of the repository,
+  using the asset that matches `asset` (a `.zip` or an `.exe`);
+- **FTP/FTPS** (`"remote_dir"` + `"package"`): a package on the `server`.
 """
 
 from __future__ import annotations
@@ -10,7 +16,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .i18n import tr
 
@@ -19,6 +25,10 @@ EXAMPLE_CONFIG_FILE_NAME = "launcher_config.example.json"
 
 _HEX_COLOR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _SLUG = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+
+# Text shown to the user: a plain string or {"en": "...", "pt-BR": "..."}.
+Text = str | dict
 
 
 class ConfigError(ValueError):
@@ -56,6 +66,12 @@ class AuthConfig:
 
 
 @dataclass(frozen=True)
+class GitHubSettings:
+    token: str = ""                  # optional: private repositories / higher rate limit
+    timeout: int = 20
+
+
+@dataclass(frozen=True)
 class AppOption:
     key: str
     label: str
@@ -72,17 +88,39 @@ class ExtraAction:
 
 
 @dataclass(frozen=True)
+class AppLink:
+    label: Text
+    url: str
+
+
+@dataclass(frozen=True)
 class AppConfig:
     id: str
     name: str
-    remote_dir: str
-    package: str
     install_dir: str
-    executable: str
-    description: str = ""
+    executable: str = ""             # may be empty for GitHub apps (detected on install)
+    # FTP source
+    remote_dir: str = ""
+    package: str = ""
+    # GitHub source
+    github: str = ""                 # "owner/repo"
+    asset: str = ""                  # glob of the release asset; empty = automatic
+    prerelease: bool = False         # also offer pre-releases
+    # presentation
+    description: Text = ""
+    tagline: Text = ""
+    accent_color: str = ""           # empty = the launcher accent
+    banner: Text = ""                # image (URL or path) that fills the header
+    screenshot: Text = ""            # image (URL or path) shown framed in the header
+    icon: str = ""                   # image (URL or path) for the library
+    links: tuple = ()
     env: dict = field(default_factory=dict)
     extra_actions: tuple = ()
     options: tuple = ()
+
+    @property
+    def source(self) -> str:
+        return "github" if self.github else "ftp"
 
 
 @dataclass(frozen=True)
@@ -102,8 +140,13 @@ class DownloadTab:
 
 @dataclass(frozen=True)
 class SelfUpdateConfig:
-    remote_dir: str
+    remote_dir: str = ""             # FTP: folder of the published .exe
     file_name: str = "Launcher.exe"
+    github: str = ""                 # GitHub: "owner/repo" whose releases carry the .exe
+
+    @property
+    def source(self) -> str:
+        return "github" if self.github else "ftp"
 
 
 @dataclass(frozen=True)
@@ -111,13 +154,15 @@ class LauncherConfig:
     app_id: str
     app_name: str
     accent_color: str
-    server: ServerConfig
+    server: ServerConfig | None
     apps: tuple
     auth: AuthConfig = AuthConfig()
+    github: GitHubSettings = GitHubSettings()
     support_url: str = ""
     downloads: tuple = ()
     self_update: SelfUpdateConfig | None = None
     language: str = ""              # "" / "auto" follows the system
+    install_root: str = ""          # folder for installed apps; "" = launcher folder
     source: Path | None = None
     is_example: bool = False
 
@@ -139,6 +184,47 @@ def _require(data: dict, key: str, where: str):
 def _str(data: dict, key: str, default: str = "") -> str:
     value = data.get(key, default)
     return default if value is None else str(value)
+
+
+def _text(data: dict, key: str, where: str) -> Text:
+    """A user-facing text: a string or a {language: text} object."""
+    value = data.get(key)
+    if value is None:
+        return ""
+    if isinstance(value, dict):
+        return {str(k): str(v) for k, v in value.items() if v is not None}
+    if isinstance(value, (list, tuple)):
+        raise ConfigError(tr("{where}: '{key}' must be a text or an object of translations.",
+                             where=where, key=key))
+    return str(value)
+
+
+def _color(data: dict, key: str, where: str) -> str:
+    value = _str(data, key)
+    if value and not _HEX_COLOR.match(value):
+        raise ConfigError(tr("{where}: {key} must be in the #RRGGBB format.", where=where, key=key))
+    return value
+
+
+def _repo(value: str, where: str) -> str:
+    repo = value.strip().strip("/")
+    for prefix in ("https://github.com/", "http://github.com/", "github.com/"):
+        if repo.lower().startswith(prefix):
+            repo = repo[len(prefix):].strip("/")
+    if repo.lower().endswith(".git"):
+        repo = repo[:-4]
+    if not _REPO.match(repo):
+        raise ConfigError(tr("{where}: github must be in the 'owner/repository' format.", where=where))
+    return repo
+
+
+def _relative_path(value: str, where: str, key: str) -> str:
+    """A path that must stay inside the install folder."""
+    path = PurePosixPath(value.replace("\\", "/"))
+    if path.is_absolute() or ".." in path.parts or re.match(r"^[A-Za-z]:", value):
+        raise ConfigError(tr("{where}: {key} must be a path inside the install folder.",
+                             where=where, key=key))
+    return value
 
 
 def _parse_server(data: dict) -> ServerConfig:
@@ -201,10 +287,23 @@ def _parse_option(data: dict, where: str) -> AppOption:
 
 def _parse_app(data: dict, index: int) -> AppConfig:
     where = f"apps[{index}]"
+    if not isinstance(data, dict):
+        raise ConfigError(tr("{where} must be an object.", where=where))
     app_id = _require(data, "id", where)
     if not _SLUG.match(app_id):
         raise ConfigError(tr("{where}: id '{id}' may only contain letters, digits, '-', '_' or '.'.",
                              where=where, id=app_id))
+    github = _repo(_str(data, "github"), where) if data.get("github") else ""
+    if github:
+        remote_dir = package = ""
+        executable = _str(data, "executable")
+    else:
+        remote_dir = _require(data, "remote_dir", where)
+        package = _require(data, "package", where)
+        executable = _require(data, "executable", where)
+    if executable:
+        _relative_path(executable, where, "executable")
+
     options = tuple(
         _parse_option(o, f"{where}.options[{i}]")
         for i, o in enumerate(data.get("options") or [])
@@ -215,18 +314,35 @@ def _parse_app(data: dict, index: int) -> AppConfig:
     actions = tuple(
         ExtraAction(
             label=_require(a, "label", f"{where}.extra_actions[{i}]"),
-            executable=_require(a, "executable", f"{where}.extra_actions[{i}]"),
+            executable=_relative_path(_require(a, "executable", f"{where}.extra_actions[{i}]"),
+                                      f"{where}.extra_actions[{i}]", "executable"),
         )
         for i, a in enumerate(data.get("extra_actions") or [])
     )
+    links = []
+    for i, link in enumerate(data.get("links") or []):
+        link_where = f"{where}.links[{i}]"
+        _require(link, "label", link_where)
+        links.append(AppLink(label=_text(link, "label", link_where), url=_require(link, "url", link_where)))
+
+    name = _require(data, "name", where)
     return AppConfig(
         id=app_id,
-        name=_require(data, "name", where),
-        remote_dir=_require(data, "remote_dir", where),
-        package=_require(data, "package", where),
-        install_dir=_str(data, "install_dir") or _require(data, "name", where),
-        executable=_require(data, "executable", where),
-        description=_str(data, "description"),
+        name=name,
+        install_dir=_relative_path(_str(data, "install_dir") or name, where, "install_dir"),
+        executable=executable,
+        remote_dir=remote_dir,
+        package=package,
+        github=github,
+        asset=_str(data, "asset"),
+        prerelease=bool(data.get("prerelease", False)),
+        description=_text(data, "description", where),
+        tagline=_text(data, "tagline", where),
+        accent_color=_color(data, "accent_color", where),
+        banner=_text(data, "banner", where),
+        screenshot=_text(data, "screenshot", where),
+        icon=_str(data, "icon"),
+        links=tuple(links),
         env={str(k): str(v) for k, v in (data.get("env") or {}).items()},
         extra_actions=actions,
         options=options,
@@ -252,6 +368,16 @@ def _parse_download_tab(data: dict, index: int) -> DownloadTab:
     )
 
 
+def _parse_self_update(data: dict) -> SelfUpdateConfig:
+    if data.get("github"):
+        return SelfUpdateConfig(github=_repo(_str(data, "github"), "self_update"),
+                                file_name=_str(data, "file_name", "Launcher.exe"))
+    return SelfUpdateConfig(
+        remote_dir=_require(data, "remote_dir", "self_update"),
+        file_name=_str(data, "file_name", "Launcher.exe"),
+    )
+
+
 def parse_config(data: dict, source: Path | None = None,
                  is_example: bool = False) -> LauncherConfig:
     if not isinstance(data, dict):
@@ -271,27 +397,35 @@ def parse_config(data: dict, source: Path | None = None,
     app_name = _str(data, "app_name", "App Launcher")
     app_id = _str(data, "app_id") or re.sub(r"[^A-Za-z0-9]+", "", app_name) or "AppLauncher"
 
-    self_update = None
-    if data.get("self_update"):
-        su = data["self_update"]
-        self_update = SelfUpdateConfig(
-            remote_dir=_require(su, "remote_dir", "self_update"),
-            file_name=_str(su, "file_name", "Launcher.exe"),
-        )
+    self_update = _parse_self_update(data["self_update"]) if data.get("self_update") else None
+    downloads = tuple(
+        _parse_download_tab(t, i) for i, t in enumerate(data.get("downloads") or [])
+    )
+
+    # The FTP server is only required when something is served by it.
+    needs_server = (any(a.source == "ftp" for a in apps) or bool(downloads)
+                    or (self_update is not None and self_update.source == "ftp"))
+    server = None
+    if data.get("server") or needs_server:
+        server = _parse_server(_require(data, "server", "config"))
+
+    github = data.get("github") or {}
+    if not isinstance(github, dict):
+        raise ConfigError(tr("'github' must be an object."))
 
     return LauncherConfig(
         app_id=app_id,
         app_name=app_name,
         accent_color=accent,
-        server=_parse_server(_require(data, "server", "config")),
+        server=server,
         apps=apps,
         auth=_parse_auth(data.get("auth")),
+        github=GitHubSettings(token=_str(github, "token"), timeout=int(github.get("timeout") or 20)),
         support_url=_str(data, "support_url"),
-        downloads=tuple(
-            _parse_download_tab(t, i) for i, t in enumerate(data.get("downloads") or [])
-        ),
+        downloads=downloads,
         self_update=self_update,
         language=_str(data, "language"),
+        install_root=_str(data, "install_root"),
         source=source,
         is_example=is_example,
     )

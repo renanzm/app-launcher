@@ -1,353 +1,823 @@
-"""Main window: app selection, versions, updating and launching."""
+"""Main window, in the style of a game launcher.
+
+    ┌──────────┬──────────────────────────────────────────────┐
+    │  brand   │ HOME  RELEASE NOTES  GITHUB↗ …        ⚙ — ✕  │
+    │──────────│                                              │
+    │ library  │        artwork · title · release cards       │
+    │  (apps)  │                                              │
+    │          ├──────────────────────────────────────────────┤
+    │ actions  │ versions │ status + progress │ ⚙ │  ▶ PLAY   │
+    └──────────┴──────────────────────────────────────────────┘
+
+Network work (checking releases, downloading, installing) always runs in a
+`Task`, so the window never freezes.
+"""
 
 from __future__ import annotations
 
+import math
 import os
 import shutil
 import sys
+import time
 import webbrowser
+from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from PyQt6.QtCore import QSize, Qt, QTimer
-from PyQt6.QtGui import QIcon
+from PyQt6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QSize, Qt, QTimer
+from PyQt6.QtGui import QColor, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
-    QApplication, QComboBox, QHBoxLayout, QMenu, QProgressBar, QPushButton, QVBoxLayout,
+    QApplication, QButtonGroup, QHBoxLayout, QMenu, QPushButton, QToolButton, QVBoxLayout, QWidget,
 )
 
-from .. import __version__, auth, installer, remote, self_update
-from ..i18n import tr
-from . import icons, messages, theme
+from .. import __version__, auth, github, installer, remote, self_update, sources
+from ..i18n import localized, tr
+from ..state import default_cache_dir
+from . import icons, messages, native, theme
+from .actionbar import ActionBar
 from .downloads import DownloadsDialog
+from .images import ImageStore
+from .library import Sidebar
 from .settings import SettingsDialog
-from .widgets import FramelessWindow, Task, VersionTile, divider, icon_button, label
+from .stage import HomePage, NotesPage, Pages, Stage, format_date
+from .widgets import DragArea, Task
 
 _TEMP_DIR_NAME = ".launcher-tmp"
+WINDOW_SIZE = QSize(1200, 720)
+RECHECK_INTERVAL_MS = 30 * 60 * 1000
 
 
-class MainWindow(FramelessWindow):
+@dataclass
+class AppState:
+    info: sources.AppInfo | None = None
+    checking: bool = False
+    error: str = ""
+    process: object = None                 # subprocess.Popen of the running app
+    task: Task | None = None               # running install
+    phase: str = ""                        # "", "download", "install"
+    progress: float | None = None
+    last: tuple | None = None              # (bytes done, total) of the download
+    samples: deque = field(default_factory=lambda: deque(maxlen=40))
+
+
+class TopBar(QWidget):
+    """Navigation tabs and external links on the left, window buttons on the right."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(56)
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(26, 0, 0, 0)
+        lay.setSpacing(0)
+        self.tabs = QButtonGroup(self)
+        self.tabs.setExclusive(True)
+        self.btn_home = self._nav(tr("Home"), checkable=True)
+        self.btn_notes = self._nav(tr("Release notes"), checkable=True)
+        self.tabs.addButton(self.btn_home, 0)
+        self.tabs.addButton(self.btn_notes, 1)
+        lay.addWidget(self.btn_home)
+        lay.addWidget(self.btn_notes)
+        self.links = QHBoxLayout()
+        self.links.setSpacing(0)
+        lay.addLayout(self.links)
+        lay.addWidget(DragArea(), 1)
+        self.right = QHBoxLayout()
+        self.right.setContentsMargins(0, 0, 0, 0)
+        self.right.setSpacing(2)
+        lay.addLayout(self.right)
+        lay.addSpacing(10)
+        self.window_buttons = QHBoxLayout()
+        self.window_buttons.setSpacing(0)
+        lay.addLayout(self.window_buttons)
+        lay.setAlignment(self.window_buttons, Qt.AlignmentFlag.AlignTop)
+
+    @staticmethod
+    def _nav(text: str, checkable: bool = False, external: bool = False) -> QPushButton:
+        btn = QPushButton(text.upper())
+        btn.setProperty("role", "nav")
+        btn.setCheckable(checkable)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        if external:
+            btn.setIcon(icons.icon("external", theme.palette().faint, 12))
+            btn.setIconSize(QSize(12, 12))
+            btn.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        return btn
+
+    def set_links(self, links, on_click):
+        while self.links.count():
+            item = self.links.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        for text, url in links:
+            btn = self._nav(text, external=True)
+            btn.setToolTip(url)
+            btn.clicked.connect(lambda _=False, u=url: on_click(u))
+            self.links.addWidget(btn)
+
+    def add_icon(self, button):
+        self.right.addWidget(button, 0, Qt.AlignmentFlag.AlignVCenter)
+
+    def add_window_button(self, name: str, tooltip: str, object_name: str) -> QToolButton:
+        pal = theme.palette()
+        btn = QToolButton()
+        btn.setObjectName(object_name)
+        btn.setIcon(icons.icon(name, pal.muted, 16))
+        btn.setIconSize(QSize(16, 16))
+        btn.setFixedSize(48, 40)
+        btn.setToolTip(tooltip)
+        btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.window_buttons.addWidget(btn)
+        return btn
+
+
+class MainWindow(QWidget):
     def __init__(self, config, store, base_dir: Path, user: str = "", password: str = "",
                  self_update_failed: bool = False):
-        super().__init__(config.app_name, width=440)
+        super().__init__()
+        self.setObjectName("LauncherWindow")
+        self.setWindowTitle(config.app_name)
+        self.setWindowFlag(Qt.WindowType.FramelessWindowHint, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.config = config
         self.store = store
         self.base_dir = Path(base_dir)
-        self.server = remote.RemoteServer(config.server, store)
+        self.root = installer.resolve_root(self.base_dir, config.install_root)
+        self.client = github.GitHubClient(config.github.token, default_cache_dir(config.app_id),
+                                          timeout=config.github.timeout)
+        self.server = remote.RemoteServer(config.server, store) if config.server else None
+        self.images = ImageStore(self.client, config.source.parent if config.source else self.base_dir, self)
         self._session = auth.session_env(config.auth, user, password)
         self._session_user, self._session_password = user, password
         self._self_update_failed = self_update_failed
-        self._remote: dict[str, remote.RemoteFile] = {}   # last MDTM/SIZE seen per app
-        self._pending: remote.RemoteFile | None = None
-        self._busy = False
+        self._self_update_pending = bool(config.self_update)
         self._self_updating = False
-        pal = theme.palette()
+        self._queue: list[str] = []
+        self._native = False
+        self._fade = None
+        self.states = {app.id: AppState() for app in config.apps}
+        self._index = 0
 
-        # -- title bar ----------------------------------------------------
-        self.btn_report = icon_button("bug", tr("Report a bug"))
-        self.btn_downloads = icon_button("box", tr("Downloads"))
-        self.btn_settings = icon_button("settings", tr("Settings"))
-        btn_min = icon_button("minimize", tr("Minimize"), size=16)
-        btn_close = icon_button("close", tr("Close"), "CloseButton", 16)
-        for b in (self.btn_report, self.btn_downloads, self.btn_settings, btn_min, btn_close):
-            self.title_bar.add_button(b)
-        btn_min.clicked.connect(self.showMinimized)
-        btn_close.clicked.connect(self.close)
-        self.btn_report.clicked.connect(self._report_bug)
-        self.btn_downloads.clicked.connect(self._open_downloads)
-        self.btn_settings.clicked.connect(self._open_settings)
-        self.btn_downloads.setVisible(bool(config.downloads))
-        self.btn_report.setVisible(bool(config.support_url))
+        self._build()
+        self.images.loaded.connect(self._on_image_loaded)
 
-        # -- application selector --------------------------------------------
-        self.body.addWidget(label(tr("APPLICATION"), "overline"))
-        self.combo = QComboBox()
-        self.combo.setIconSize(QSize(28, 28))
-        self.combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        for app in config.apps:
-            self.combo.addItem(QIcon(icons.avatar_pixmap(app.name, pal.accent, 28)), app.name)
-        self.body.addWidget(self.combo)
-        self.description = label("", "caption", wrap=True)
-        self.body.addWidget(self.description)
-
-        # -- versions --------------------------------------------------------
-        tiles = QHBoxLayout()
-        tiles.setSpacing(10)
-        self.tile_local = VersionTile(tr("Installed"))
-        self.tile_remote = VersionTile(tr("Available"))
-        tiles.addWidget(self.tile_local)
-        tiles.addWidget(self.tile_remote)
-        self.body.addSpacing(4)
-        self.body.addLayout(tiles)
-
-        # -- status ----------------------------------------------------------
-        self.status = label("", "muted", wrap=True)
-        self.status.setMinimumHeight(20)
-        self.body.addWidget(self.status)
-        self.progress = QProgressBar()
-        self.progress.setTextVisible(False)
-        self.body.addWidget(self.progress)
-        self.body.addSpacing(6)
-
-        # -- actions ---------------------------------------------------------
-        self.btn_open = QPushButton()
-        self.btn_open.setProperty("variant", "primary")
-        self.btn_open.setMinimumHeight(46)
-        self.btn_open.setIcon(icons.icon("play", pal.on_accent, 16, disabled_color=pal.faint))
-        self.btn_open.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_open.clicked.connect(lambda: self._launch_main())
-        self.body.addWidget(self.btn_open)
-
-        self.extra_box = QVBoxLayout()
-        self.extra_box.setSpacing(8)
-        self.body.addLayout(self.extra_box)
-        self._extra_buttons: list[QPushButton] = []
-
-        update_row = QHBoxLayout()
-        update_row.setSpacing(0)
-        self.btn_update = QPushButton(tr("Check for updates"))
-        self.btn_update.setProperty("segment", "left")
-        self.btn_update.setIcon(icons.icon("refresh", pal.muted, 16, disabled_color=pal.faint))
-        self.btn_update.clicked.connect(self._on_update_clicked)
-        self.btn_more = QPushButton()
-        self.btn_more.setProperty("segment", "right")
-        self.btn_more.setIcon(icons.icon("more", pal.muted, 16, disabled_color=pal.faint))
-        self.btn_more.setToolTip(tr("More options"))
-        self.btn_more.clicked.connect(self._show_more_menu)
-        update_row.addWidget(self.btn_update, 1)
-        update_row.addWidget(self.btn_more)
-        self.body.addLayout(update_row)
-
-        self.footer = label("", "caption")
-        self.footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.body.addSpacing(2)
-        self.body.addWidget(divider())
-        self.body.addWidget(self.footer)
-
-        # Restore the last app used.
         last = store.pref("last_app", "")
         index = next((i for i, a in enumerate(config.apps) if a.id == last), 0)
-        self.combo.setCurrentIndex(index)
-        self.combo.currentIndexChanged.connect(self._on_app_changed)
-        self._refresh()
+        self._select(index, animate=False)
 
-        QTimer.singleShot(400, self._startup_checks)
+        self._poll = QTimer(self)
+        self._poll.timeout.connect(self._poll_processes)
+        self._poll.start(1500)
+        self._recheck = QTimer(self)
+        self._recheck.timeout.connect(lambda: self._check_all(quiet=True))
+        self._recheck.start(RECHECK_INTERVAL_MS)
+        QShortcut(QKeySequence("F5"), self, activated=lambda: self._check(self.app, quiet=False))
+        QTimer.singleShot(150, self._startup_checks)
 
     # ------------------------------------------------------------------
-    # State
+    # Layout
     # ------------------------------------------------------------------
 
-    @property
-    def app(self):
-        return self.config.apps[self.combo.currentIndex()]
+    def _build(self):
+        pal = theme.palette()
+        screen = QApplication.primaryScreen().availableGeometry() if QApplication.primaryScreen() else None
+        size = QSize(WINDOW_SIZE)
+        if screen is not None:
+            size = QSize(min(size.width(), screen.width() - 40), min(size.height(), screen.height() - 40))
+        self.setFixedSize(size)
 
-    def _install_dir(self) -> Path:
-        return installer.install_path(self.base_dir, self.app)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
 
-    def _local_record(self):
-        """(mdtm, size) of the official installation, if the folder still exists."""
-        if not self._install_dir().is_dir():
-            return None
-        return self.store.install_record(self.app.id)
-
-    def _on_app_changed(self, _index: int):
-        self.store.set_pref("last_app", self.app.id)
-        self._pending = None
-        self.progress.setValue(0)
-        self._refresh()
-
-    def _refresh(self, status: str | None = None):
-        app = self.app
-        installed = installer.is_installed(self.base_dir, app)
-        record = self._local_record()
-        self.description.setText(app.description)
-        self.description.setVisible(bool(app.description))
-        self._update_tiles(record[0] if record else None,
-                           (self._remote.get(app.id) or remote.RemoteFile("", None, None)).mdtm)
-
-        self.btn_open.setText(tr("Open {name}", name=app.name))
-        self._rebuild_extra_buttons()
-
-        if self._pending is not None:
-            self.btn_update.setText(tr("Install update") if installed else tr("Install"))
-            self.btn_update.setIcon(icons.icon("download", theme.palette().on_accent, 16,
-                                               disabled_color=theme.palette().faint))
-            theme.set_role(self.btn_update, "variant", "primary")
+        self.sidebar = Sidebar(self.config.app_name, f"v{__version__}", self.config.apps, self._accent)
+        self.sidebar.app_selected.connect(lambda i: self._select(i, animate=True))
+        if self.config.downloads and self.server is not None:
+            btn = QPushButton(tr("Downloads").upper())
+            btn.setProperty("role", "sidebar-action")
+            btn.setIcon(icons.icon("box", pal.muted, 16))
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.clicked.connect(self._open_downloads)
+            self.sidebar.add_action(btn)
+            self.btn_downloads = btn
         else:
-            self.btn_update.setText(tr("Check for updates"))
-            self.btn_update.setIcon(icons.icon("refresh", theme.palette().muted, 16,
-                                               disabled_color=theme.palette().faint))
-            theme.set_role(self.btn_update, "variant", "")
+            self.btn_downloads = None
+        self.sidebar.footer.setText(self._footer_text())
+        self.sidebar.footer.setVisible(bool(self._footer_text()))
+        root.addWidget(self.sidebar)
 
-        if status is None:
-            if not installed:
-                status = tr("Not installed. Use “Check for updates” to install.")
-            elif record:
-                status = tr("Ready · updated on {date}", date=remote.format_mdtm(record[0]))
-            else:
-                status = tr("Ready.")
-        self.status.setText(status)
-        self.footer.setText(self._footer_text())
-        self._apply_enabled()
-        self.adjustSize()
+        main = QVBoxLayout()
+        main.setContentsMargins(0, 0, 0, 0)
+        main.setSpacing(0)
+        root.addLayout(main, 1)
+
+        self.stage = Stage(self.images)
+        stage_lay = QVBoxLayout(self.stage)
+        stage_lay.setContentsMargins(0, 0, 0, 0)
+        stage_lay.setSpacing(0)
+        self.topbar = TopBar()
+        stage_lay.addWidget(self.topbar)
+        self.pages = Pages()
+        self.home = HomePage()
+        self.notes = NotesPage(self.images)
+        self.pages.addWidget(self.home)
+        self.pages.addWidget(self.notes)
+        stage_lay.addWidget(self.pages, 1)
+        main.addWidget(self.stage, 1)
+
+        self.home.open_notes.connect(self._show_notes)
+        self.home.open_url.connect(webbrowser.open)
+        self.notes.open_url.connect(webbrowser.open)
+        self.topbar.tabs.idClicked.connect(self._set_page)
+        self.topbar.btn_home.setChecked(True)
+
+        self.btn_settings = self._icon_button("settings", tr("Settings"))
+        self.btn_settings.clicked.connect(self._open_settings)
+        self.topbar.add_icon(self.btn_settings)
+        self.btn_report = self._icon_button("bug", tr("Report a bug"))
+        self.btn_report.clicked.connect(lambda: webbrowser.open(self.config.support_url))
+        self.btn_report.setVisible(bool(self.config.support_url))
+        self.topbar.add_icon(self.btn_report)
+        btn_min = self.topbar.add_window_button("minimize", tr("Minimize"), "WindowButton")
+        btn_min.clicked.connect(self.showMinimized)
+        btn_close = self.topbar.add_window_button("close", tr("Close"), "WindowClose")
+        btn_close.clicked.connect(self.close)
+
+        self.bar = ActionBar()
+        self.bar.play.clicked.connect(self._on_primary)
+        self.bar.options.clicked.connect(self._show_options_menu)
+        self.bar.cancel.clicked.connect(self._cancel_install)
+        main.addWidget(self.bar)
+
+    @staticmethod
+    def _icon_button(name: str, tooltip: str) -> QToolButton:
+        pal = theme.palette()
+        btn = QToolButton()
+        btn.setObjectName("IconButton")
+        btn.setIcon(icons.icon(name, pal.muted, 18, disabled_color=pal.faint))
+        btn.setIconSize(QSize(18, 18))
+        btn.setFixedSize(34, 34)
+        btn.setToolTip(tooltip)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        return btn
 
     def _footer_text(self) -> str:
-        parts = [f"v{__version__}"]
+        parts = []
         if self._session_user:
             parts.append(tr("Signed in as {user}", user=self._session_user))
         if self.config.is_example:
             parts.append(tr("using the example configuration"))
         return " · ".join(parts)
 
-    def _update_tiles(self, local_mdtm, remote_mdtm):
+    # ------------------------------------------------------------------
+    # Native frame
+    # ------------------------------------------------------------------
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not self._native:
+            self._native = True
+            native.enable(self, theme.palette().border_strong)
+        if self._fade is None:
+            self.setWindowOpacity(0.0)
+            self._fade = QPropertyAnimation(self, b"windowOpacity", self)
+            self._fade.setDuration(240)
+            self._fade.setStartValue(0.0)
+            self._fade.setEndValue(1.0)
+            self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+            self._fade.start()
+
+    def nativeEvent(self, event_type, message):
+        handled = native.handle_event(event_type, message) if self._native else None
+        return handled if handled is not None else (False, 0)
+
+    # ------------------------------------------------------------------
+    # Helpers about apps
+    # ------------------------------------------------------------------
+
+    @property
+    def app(self):
+        return self.config.apps[self._index]
+
+    def _accent(self, app) -> str:
+        return app.accent_color or self.config.accent_color
+
+    def _install_dir(self, app) -> Path:
+        return installer.install_path(self.root, app)
+
+    def _record(self, app) -> dict | None:
+        """Installed record, if the install folder still exists."""
+        if not self._install_dir(app).is_dir():
+            return None
+        return self.store.installed(app.id)
+
+    def _executable(self, app) -> str:
+        return installer.executable_for(app, self._record(app))
+
+    def _is_installed(self, app) -> bool:
+        return installer.is_installed(self.root, app, self._executable(app))
+
+    def _latest(self, app) -> sources.Version | None:
+        info = self.states[app.id].info
+        return info.latest if info else None
+
+    def _update_available(self, app) -> bool:
+        latest = self._latest(app)
+        if latest is None or not self._is_installed(app):
+            return False
+        record = self._record(app)
+        return record is None or record.get("key") != latest.key
+
+    def _running(self, app) -> bool:
+        proc = self.states[app.id].process
+        return proc is not None and proc.poll() is None
+
+    def _busy_app(self):
+        return next((a for a in self.config.apps if self.states[a.id].task is not None), None)
+
+    # ------------------------------------------------------------------
+    # Selection and rendering
+    # ------------------------------------------------------------------
+
+    def _select(self, index: int, animate: bool = True):
+        if not 0 <= index < len(self.config.apps):
+            return
+        changed = index != self._index
+        self._index = index
+        app = self.app
+        self.store.set_pref("last_app", app.id)
+        self.sidebar.select(index)
+        state = self.states[app.id]
+        if state.info is None and not state.checking and not state.error:
+            self._check(app, quiet=True)
+        self._render(animate=animate and changed)
+        if changed and self.pages.currentIndex() == 1 and not self._history(app):
+            self._set_page(0)
+
+    def _history(self, app):
+        info = self.states[app.id].info
+        return list(info.history) if info and app.source == "github" else []
+
+    def _render(self, animate: bool = False):
+        app = self.app
+        accent = self._accent(app)
+        state = self.states[app.id]
+        info = state.info
+        record = self._record(app)
+        installed_key = (record or {}).get("key", "")
+        self.stage.set_app(app.id, app.name, accent, localized(app.banner), localized(app.screenshot),
+                           animate=animate)
+        description = localized(app.description) or (info.repository.description if info and info.repository else "")
+        self.home.show_app(app, info, accent, installed_key, description, localized(app.tagline), animate)
+        latest = info.latest if info else None
+        self.notes.show_history(self._history(app), installed_key, latest.key if latest else "")
+        self.topbar.btn_notes.setEnabled(bool(self._history(app)))
+        self.topbar.set_links(self._links(app), webbrowser.open)
+        self.bar.set_accent(accent)
+        for a in self.config.apps:
+            self._render_tile(a)
+        self._render_bar()
+
+    def _links(self, app):
+        links = []
+        repo = self.states[app.id].info.repository if self.states[app.id].info else None
+        if app.github:
+            base = repo.html_url if repo and repo.html_url else f"https://github.com/{app.github}"
+            links.append(("GitHub", base))
+            if repo is None or repo.has_issues:
+                links.append((tr("Issues"), f"{base}/issues"))
+            if repo is not None and repo.homepage:
+                links.append((tr("Website"), repo.homepage))
+        for link in app.links:
+            links.append((localized(link.label), link.url))
+        return links[:5]
+
+    def _render_tile(self, app):
         pal = theme.palette()
-        if local_mdtm and remote_mdtm:
-            local_color = pal.success if local_mdtm == remote_mdtm else pal.warning
-            remote_color = pal.success
+        tile = self.sidebar.tiles[self.config.apps.index(app)]
+        state = self.states[app.id]
+        accent = QColor(self._accent(app)).lighter(125).name()
+        installed = self._is_installed(app)
+        # Icon: configured image > the executable's own icon > initials.
+        pixmap = self.images.get(app.icon) if app.icon else None
+        if pixmap is None and installed:
+            pixmap = self.images.exe_icon(self._install_dir(app) / self._executable(app))
+        tile.set_icon(pixmap)
+
+        if state.task is not None:
+            if state.phase == "download" and state.progress is not None:
+                text = tr("Downloading · {percent}%", percent=int(state.progress * 100))
+            else:
+                text = tr("Installing…")
+            tile.set_status(text, accent, progress=state.progress or 0.0)
+        elif self._running(app):
+            tile.set_status(tr("Running"), pal.success)
+        elif self._update_available(app):
+            tile.set_status(tr("Update · {version}", version=self._latest(app).label), accent, badge=True)
+        elif installed:
+            label_ = sources.describe_record(self._record(app)) or tr("Installed")
+            tile.set_status(label_, pal.muted)
+        elif state.checking and state.info is None:
+            tile.set_status(tr("Checking…"), pal.faint)
+        elif state.error and state.info is None:
+            tile.set_status(tr("Unavailable"), pal.warning)
         else:
-            local_color = pal.accent if local_mdtm else pal.faint
-            remote_color = pal.accent if remote_mdtm else pal.faint
-        self.tile_local.set_value(remote.format_mdtm(local_mdtm), local_color)
-        self.tile_remote.set_value(remote.format_mdtm(remote_mdtm), remote_color)
+            tile.set_status(tr("Not installed"), pal.faint)
 
-    def _rebuild_extra_buttons(self):
-        for btn in self._extra_buttons:
-            btn.deleteLater()
-        self._extra_buttons = []
-        for action in self.app.extra_actions:
-            btn = QPushButton(action.label)
-            btn.clicked.connect(lambda _=False, exe=action.executable: self._launch(exe))
-            self.extra_box.addWidget(btn)
-            self._extra_buttons.append(btn)
+    def _render_bar(self):
+        pal = theme.palette()
+        app = self.app
+        state = self.states[app.id]
+        latest = self._latest(app)
+        record = self._record(app)
+        installed = self._is_installed(app)
+        update = self._update_available(app)
+        busy_app = self._busy_app()
+        accent_light = QColor(self._accent(app)).lighter(125).name()
 
-    def _apply_enabled(self):
-        idle = not self._busy
-        installed = installer.is_installed(self.base_dir, self.app)
-        self.btn_open.setEnabled(idle and installed)
-        for btn in self._extra_buttons:
-            btn.setEnabled(idle and installed)
-        for w in (self.combo, self.btn_update, self.btn_more,
-                  self.btn_report, self.btn_downloads, self.btn_settings):
-            w.setEnabled(idle)
+        # -- info grid ---------------------------------------------------
+        if installed:
+            self.bar.set_info("installed", sources.describe_record(record) or tr("Unknown version"))
+        else:
+            self.bar.set_info("installed", tr("Not installed"), pal.faint)
+        if latest is not None:
+            text = latest.label if app.source == "ftp" else f"{latest.label} · {format_date(latest.published)}"
+            self.bar.set_info("latest", text, accent_light if update else "")
+        else:
+            self.bar.set_info("latest", tr("Checking…") if state.checking else "—", pal.faint)
+        size = latest.size if latest is not None and latest.size else None
+        self.bar.set_info("size", remote.format_size(size) if size else "—")
 
-    def _set_busy(self, busy: bool, status: str | None = None):
-        self._busy = busy
-        if status:
-            self.status.setText(status)
-        if busy:
-            self.progress.setValue(0)
-        self._apply_enabled()
+        # -- primary button ----------------------------------------------
+        play = self.bar.play
+        if state.task is not None:
+            play.set_state(tr("Downloading") if state.phase == "download" else tr("Installing"), "download", "busy")
+            play.setEnabled(False)
+        elif self._running(app):
+            play.set_state(tr("Running"), "check", "running")
+            play.setEnabled(False)
+        elif update:
+            play.set_state(tr("Update"), "download")
+            play.setEnabled(busy_app is None and not self._self_updating)
+        elif installed:
+            play.set_state(tr("Launch"), "play")
+            play.setEnabled(not self._self_updating)
+        else:
+            play.set_state(tr("Install"), "download")
+            play.setEnabled(latest is not None and latest.installable and busy_app is None
+                            and not self._self_updating)
+        self.bar.options.setEnabled(state.task is None and not self._self_updating)
 
-    def _fail(self, title: str, exc: BaseException, quiet: bool = False):
-        self._set_busy(False)
-        self._refresh()
-        if not quiet:
-            messages.error(self, title, messages.describe(exc))
+        # -- status --------------------------------------------------------
+        if state.task is not None or self._self_updating:
+            return                                   # the task keeps the status up to date
+        self.bar.set_busy(False)
+        status, color = "", ""
+        if self._running(app):
+            status = tr("{name} is running.", name=app.name)
+        elif update:
+            status = tr("Update available: {new} (you have {old}).", new=latest.label,
+                        old=sources.describe_record(record) or tr("an unknown version"))
+            color = accent_light
+        elif installed:
+            status = tr("Ready to launch.") if app.source == "github" or latest else tr("Ready.")
+        elif latest is not None and latest.installable:
+            status = tr("{version} is ready to install.", version=latest.label)
+        elif state.checking:
+            status = tr("Checking for the latest version…")
+        elif state.info is not None and state.info.problem:
+            status, color = state.info.problem, pal.warning
+        elif state.error:
+            status, color = state.error, pal.warning
+        if busy_app is not None and busy_app is not app and not installed:
+            status = tr("Waiting for {name} to finish installing.", name=busy_app.name)
+        if state.info is not None and state.info.offline:
+            status += "  " + tr("(offline: showing saved information)")
+        self.bar.status.setText(status)
+        self.bar.status.setStyleSheet(f"color: {color};" if color else "")
+        folder = self._install_dir(app)
+        hint = (tr("Installed in {path}", path=folder) if installed
+                else tr("Will be installed in {path}", path=folder))
+        self.bar.hint.setText(hint)
+
+    def _on_image_loaded(self, ref: str):
+        for app in self.config.apps:
+            if ref == app.icon:
+                self._render_tile(app)
 
     # ------------------------------------------------------------------
-    # Application update
+    # Pages
     # ------------------------------------------------------------------
 
-    def _on_update_clicked(self):
-        if self._pending is not None:
-            self._install(self._pending)
+    def _set_page(self, index: int):
+        self.pages.setCurrentIndex(index)
+        self.stage.set_dimmed(index == 1)
+        button = self.topbar.tabs.button(index)
+        if button is not None and not button.isChecked():
+            button.setChecked(True)
+
+    def _show_notes(self, index: int = 0):
+        if not self._history(self.app):
+            return
+        self._set_page(1)
+        self.notes.select(index)
+
+    # ------------------------------------------------------------------
+    # Checking versions
+    # ------------------------------------------------------------------
+
+    def _source(self, app):
+        return sources.make_source(app, self.client, self.server)
+
+    def _check_all(self, quiet: bool = True):
+        for app in self.config.apps:
+            self._check(app, quiet=quiet)
+
+    def _check(self, app, quiet: bool = True):
+        state = self.states[app.id]
+        if state.checking or state.task is not None:
+            return
+        state.checking = True
+        state.error = ""
+        if app is self.app:
+            self._render_bar()
+        self._render_tile(app)
+        source = self._source(app)
+
+        def done(info: sources.AppInfo):
+            state.checking = False
+            first = state.info is None
+            state.info = info
+            if app is self.app:
+                self._render(animate=False) if not first else self._render_after_first_check()
+            else:
+                self._render_tile(app)
+            if not quiet and app is self.app and not self._update_available(app) and self._is_installed(app):
+                self.bar.status.setText(tr("All good · you already have the latest version."))
+            self._maybe_queue_update(app)
+
+        def fail(exc):
+            state.checking = False
+            state.error = messages.describe(exc).replace("<br>", " ")
+            if app is self.app:
+                self._render_bar()
+            self._render_tile(app)
+            if not quiet:
+                messages.error(self, tr("Check for updates"), messages.describe(exc))
+
+        Task.start_new(self, lambda ctx: source.check(), done, fail)
+
+    def _render_after_first_check(self):
+        # The first answer fills the page: fade the new content in.
+        self._render(animate=False)
+        self.home._animate_in()
+
+    def _maybe_queue_update(self, app):
+        if (self.store.pref("auto_update", False) and self._update_available(app)
+                and not self._running(app) and app.id not in self._queue):
+            self._queue.append(app.id)
+        self._process_queue()
+
+    def _process_queue(self):
+        if self._self_update_pending or self._self_updating or self._busy_app() is not None:
+            return
+        while self._queue:
+            app = self.config.app(self._queue.pop(0))
+            if app is not None and self._update_available(app) and not self._running(app):
+                self._install(app, auto=True)
+                return
+
+    # ------------------------------------------------------------------
+    # Installing
+    # ------------------------------------------------------------------
+
+    def _on_primary(self):
+        app = self.app
+        if self._update_available(app) or not self._is_installed(app):
+            self._install(app)
         else:
-            self._check_updates()
+            self._launch(app, self._executable(app))
 
-    def _check_updates(self, auto: bool = False):
-        app = self.app
-        self._set_busy(True, tr("Connecting to the server…"))
-
-        def work(ctx):
-            with self.server.connect() as ftp:
-                ctx.status(tr("Checking the published version…"))
-                ftp.cwd(app.remote_dir)
-                return remote.stat(ftp, app.package)
-
-        def done(rf: remote.RemoteFile):
-            self._remote[app.id] = rf
-            self._set_busy(False)
-            record = self._local_record()
-            installed = installer.is_installed(self.base_dir, app)
-            if installed and record and record == (rf.mdtm, rf.size):
-                self._pending = None
-                self.progress.setValue(100)
-                self._refresh(tr("All good · you already have the latest version."))
-                return
-            if auto and not installed:
-                self._refresh()
-                return
-            self._pending = rf
-            date = remote.format_mdtm(rf.mdtm)
-            self._refresh(tr("New version available · {date}", date=date) if installed
-                          else tr("Version available · {date}", date=date))
-            if auto:
-                self._install(rf, auto=True)
-
-        Task.start_new(self, work, done,
-                       lambda exc: self._fail(tr("Check for updates"), exc, quiet=auto),
-                       on_status=self.status.setText)
-
-    def _install(self, rf: remote.RemoteFile, auto: bool = False):
-        app = self.app
-        target = self._install_dir()
-        temp_zip = self.base_dir / _TEMP_DIR_NAME / f"{app.id}.zip"
-        self._set_busy(True, tr("Downloading…"))
+    def _install(self, app, auto: bool = False):
+        state = self.states[app.id]
+        version = self._latest(app)
+        if version is None or not version.installable or state.task is not None:
+            return
+        if self._running(app):
+            messages.warning(self, tr("Install"), tr("Close {name} before updating it.", name=app.name))
+            return
+        target = self._install_dir(app)
+        temp_dir = self.root / _TEMP_DIR_NAME / app.id
+        source = self._source(app)
 
         def work(ctx):
-            with self.server.connect() as ftp:
-                ftp.cwd(app.remote_dir)
-                remote.download(ftp, rf.name, temp_zip, rf.size, on_progress=ctx.progress)
-            ctx.status(tr("Installing…"))
-            ctx.progress(0)
+            ctx.status("download")
+            downloaded = source.download(version, temp_dir,
+                                         on_progress=lambda done, total: ctx.report((done, total)),
+                                         cancelled=ctx.cancelled)
+            ctx.status("install")
+            ctx.report(None, force=True)
             try:
-                installer.install_package(temp_zip, target, on_progress=ctx.progress)
+                return installer.install_download(downloaded, target, app,
+                                                  on_progress=lambda pct: ctx.report(pct / 100.0))
             finally:
-                temp_zip.unlink(missing_ok=True)
-            return rf
+                downloaded.unlink(missing_ok=True)
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                try:
+                    temp_dir.parent.rmdir()          # only when no other download uses it
+                except OSError:
+                    pass
 
-        def done(_rf):
-            self.store.set_install_record(app.id, rf.mdtm, rf.size)
-            self._pending = None
-            self._set_busy(False)
-            self.progress.setValue(100)
-            self._refresh(tr("Updated · version from {date}", date=remote.format_mdtm(rf.mdtm)))
-            if not auto:
-                messages.success(self, tr("Installation complete"),
-                                 tr("<b>{name}</b> is ready to use.", name=app.name))
+        def on_status(phase: str):
+            state.phase = phase
+            state.progress = 0.0 if phase == "install" else None
+            if app is self.app:
+                self._render_bar()
+                self._show_progress(app)
 
-        Task.start_new(self, work, done, lambda exc: self._fail(tr("Install"), exc, quiet=auto),
-                       on_progress=self.progress.setValue, on_status=self.status.setText)
+        def on_report(payload):
+            if state.phase == "download" and isinstance(payload, tuple):
+                done, total = payload
+                state.samples.append((time.monotonic(), done))
+                state.progress = done / total if total else None
+                state.last = payload
+            elif isinstance(payload, float):
+                state.progress = payload
+            if app is self.app:
+                self._show_progress(app)
+            self._render_tile(app)
+
+        def finished(executable: str):
+            published = version.published.isoformat() if version.published else ""
+            self.store.set_installed(app.id, version.key, version.label, published, version.size, executable)
+            self.images.forget_exe_icon(target / executable)
+            self._end_task(app)
+            self.bar.status.setText(tr("{name} {version} installed.", name=app.name, version=version.label)
+                                    if app is self.app else self.bar.status.text())
+            self._process_queue()
+
+        def failed(exc):
+            self._end_task(app)
+            if isinstance(exc, github.DownloadCancelled):
+                if app is self.app:
+                    self.bar.status.setText(tr("Download cancelled."))
+            elif not auto:
+                messages.error(self, tr("Install"), messages.describe(exc))
+            else:
+                state.error = messages.describe(exc).replace("<br>", " ")
+                self._render_bar()
+            self._process_queue()
+
+        state.phase, state.progress = "download", None
+        state.samples.clear()
+        state.task = Task.start_new(self, work, finished, failed, on_status=on_status, on_report=on_report)
+        self._render_tile(app)
+        if app is self.app:
+            self._render_bar()
+            self._show_progress(app)
+
+    def _show_progress(self, app):
+        state = self.states[app.id]
+        if state.task is None:
+            return
+        self.bar.set_busy(True, cancellable=state.phase == "download")
+        self.bar.progress.set_value(state.progress)
+        self.bar.status.setStyleSheet("")
+        self.bar.detail.setText(f"{int(state.progress * 100)}%" if state.progress is not None else "")
+        if state.phase == "download":
+            latest = self._latest(app)
+            self.bar.status.setText(tr("Downloading {name} {version}…", name=app.name,
+                                       version=latest.label if latest else ""))
+            self.bar.hint.setText(self._speed_text(state) or tr("Connecting…"))
+        else:
+            self.bar.status.setText(tr("Installing {name}…", name=app.name))
+            self.bar.hint.setText(str(self._install_dir(app)))
+
+    @staticmethod
+    def _speed_text(state: AppState) -> str:
+        if not state.last:
+            return ""
+        done, total = state.last
+        parts = [f"{remote.format_size(done)} / {remote.format_size(total)}" if total
+                 else remote.format_size(done)]
+        samples = [s for s in state.samples if s[0] >= time.monotonic() - 4]
+        if len(samples) >= 2 and samples[-1][0] > samples[0][0]:
+            speed = (samples[-1][1] - samples[0][1]) / (samples[-1][0] - samples[0][0])
+            if speed > 0:
+                parts.append(f"{remote.format_size(int(speed))}/s")
+                if total:
+                    seconds = max(1, int(math.ceil((total - done) / speed)))
+                    parts.append(tr("{time} left", time=f"{seconds // 60}:{seconds % 60:02d}"))
+        return "  ·  ".join(parts)
+
+    def _end_task(self, app):
+        state = self.states[app.id]
+        state.task = None
+        state.phase, state.progress = "", None
+        state.samples.clear()
+        state.last = None
+        self.bar.set_busy(False)
+        self._render() if app is self.app else self._render_tile(app)
+
+    def _cancel_install(self):
+        state = self.states[self.app.id]
+        if state.task is not None:
+            state.task.cancel()
+            self.bar.status.setText(tr("Cancelling…"))
 
     # ------------------------------------------------------------------
-    # "More options" menu
+    # Launching
     # ------------------------------------------------------------------
 
-    def _show_more_menu(self):
+    def _launch(self, app, executable: str):
+        path = self._install_dir(app) / executable
+        env = installer.build_launch_env(app, self.store.option_values(app), self._session)
+        try:
+            proc = installer.launch(path, env)
+        except Exception as exc:  # noqa: BLE001
+            messages.error(self, tr("Open application"), messages.describe(exc))
+            return
+        if executable == self._executable(app):
+            self.states[app.id].process = proc
+        if self.store.pref("keep_open", False):
+            self._render()
+        else:
+            self.close()
+
+    def _poll_processes(self):
+        for app in self.config.apps:
+            state = self.states[app.id]
+            if state.process is not None and state.process.poll() is not None:
+                state.process = None
+                if app is self.app:
+                    self._render_bar()
+                self._render_tile(app)
+                self._maybe_queue_update(app)
+
+    # ------------------------------------------------------------------
+    # Options menu
+    # ------------------------------------------------------------------
+
+    def _show_options_menu(self):
         pal = theme.palette()
+        app = self.app
         menu = QMenu(self)
-        # Without this, the QSS rounded corners show over a square background.
         menu.setWindowFlags(menu.windowFlags() | Qt.WindowType.FramelessWindowHint
                             | Qt.WindowType.NoDropShadowWindowHint)
         menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        installed_dir = self._install_dir().is_dir()
-        act_integrity = menu.addAction(icons.icon("shield", pal.muted, 16), tr("Verify integrity"))
-        act_folder = menu.addAction(icons.icon("folder", pal.muted, 16), tr("Open install folder"))
-        act_folder.setEnabled(installed_dir)
+        installed = self._is_installed(app)
+        folder_exists = self._install_dir(app).is_dir()
+        actions = {}
+        extras = {}
+        if self._update_available(app) and not self._running(app):
+            actions["play"] = menu.addAction(icons.icon("play", pal.muted, 16), tr("Launch without updating"))
+        for extra in app.extra_actions:
+            act = menu.addAction(icons.icon("play", pal.muted, 16), extra.label)
+            act.setEnabled(installed)
+            extras[act] = extra
+        if actions or extras:
+            menu.addSeparator()
+        actions["check"] = menu.addAction(icons.icon("refresh", pal.muted, 16), tr("Check for updates"))
+        if self._history(app):
+            actions["notes"] = menu.addAction(icons.icon("notes", pal.muted, 16), tr("Release notes"))
+        actions["folder"] = menu.addAction(icons.icon("folder", pal.muted, 16), tr("Open install folder"))
+        actions["folder"].setEnabled(folder_exists)
+        actions["integrity"] = menu.addAction(icons.icon("shield", pal.muted, 16), tr("Verify integrity"))
+        if app.options:
+            actions["options"] = menu.addAction(icons.icon("settings", pal.muted, 16),
+                                                tr("Options of {name}", name=app.name))
         menu.addSeparator()
-        act_uninstall = menu.addAction(icons.icon("trash", pal.danger, 16), tr("Uninstall"))
-        act_uninstall.setEnabled(installed_dir)
-        chosen = menu.exec(self.btn_more.mapToGlobal(self.btn_more.rect().bottomLeft()))
-        if chosen is act_integrity:
-            self._show_integrity()
-        elif chosen is act_folder:
-            os.startfile(self._install_dir())  # noqa: S606
-        elif chosen is act_uninstall:
-            self._uninstall()
+        actions["uninstall"] = menu.addAction(icons.icon("trash", pal.danger, 16), tr("Uninstall"))
+        actions["uninstall"].setEnabled(folder_exists and not self._running(app))
 
-    def _show_integrity(self):
-        app = self.app
-        folder = self._install_dir()
-        exe = folder / app.executable
-        record = self.store.install_record(app.id)
+        button = self.bar.options
+        pos = button.mapToGlobal(button.rect().topLeft())
+        chosen = menu.exec(QPoint(pos.x(), pos.y() - menu.sizeHint().height() - 6))
+        if chosen is None:
+            return
+        if chosen is actions.get("play"):
+            self._launch(app, self._executable(app))
+        elif chosen in extras:
+            self._launch(app, extras[chosen].executable)
+        elif chosen is actions.get("check"):
+            self._check(app, quiet=False)
+        elif chosen is actions.get("notes"):
+            self._show_notes(0)
+        elif chosen is actions.get("folder"):
+            os.startfile(self._install_dir(app))  # noqa: S606
+        elif chosen is actions.get("integrity"):
+            self._show_integrity(app)
+        elif chosen is actions.get("options"):
+            self._open_settings()
+        elif chosen is actions.get("uninstall"):
+            self._uninstall(app)
+
+    def _show_integrity(self, app):
+        folder = self._install_dir(app)
+        executable = self._executable(app)
+        exe = folder / executable if executable else folder
+        record = self._record(app)
         pal = theme.palette()
 
         def line(ok: bool, text: str, detail: str):
@@ -357,22 +827,22 @@ class MainWindow(FramelessWindow):
                     f"<span style='color:{pal.muted}'>{detail}</span>")
 
         rows = [
-            line(folder.is_dir(), tr("Install folder"),
-                 tr("found") if folder.is_dir() else tr("not found")),
-            line(exe.is_file(), tr("Executable <i>{name}</i>", name=app.executable),
-                 tr("found") if exe.is_file() else tr("not found")),
+            line(folder.is_dir(), tr("Install folder"), tr("found") if folder.is_dir() else tr("not found")),
+            line(bool(executable) and exe.is_file(), tr("Executable <i>{name}</i>", name=executable or "?"),
+                 tr("found") if executable and exe.is_file() else tr("not found")),
             line(record is not None, tr("Version record"),
-                 remote.format_mdtm(record[0]) if record else tr("missing")),
-            "&nbsp;&nbsp;&nbsp; " + tr("Files in folder: <b>{count}</b>", count=installer.count_files(folder)),
+                 sources.describe_record(record) if record else tr("missing")),
+            "&nbsp;&nbsp;&nbsp; " + tr("Files in folder: <b>{count}</b>", count=installer.count_files(folder))
+            + f" · {remote.format_size(installer.folder_size(folder))}",
         ]
         messages.info(self, tr("Integrity check"), f"<b>{app.name}</b><br><br>" + "<br>".join(rows))
 
-    def _uninstall(self):
-        app = self.app
-        folder = self._install_dir()
+    def _uninstall(self, app):
+        folder = self._install_dir(app)
         if not messages.confirm(
             self, tr("Uninstall"),
-            tr("Uninstall <b>{name}</b>?<br><br>All files in<br><i>{path}</i><br>will be deleted.", name=app.name, path=messages.path_html(folder)),
+            tr("Uninstall <b>{name}</b>?<br><br>All files in<br><i>{path}</i><br>will be deleted.",
+               name=app.name, path=messages.path_html(folder)),
             confirm_label=tr("Uninstall"), danger=True,
         ):
             return
@@ -383,34 +853,11 @@ class MainWindow(FramelessWindow):
                            tr("Could not remove the files:<br>{error}", error=messages.describe(exc)))
             return
         self.store.clear_install_record(app.id)
-        self._pending = None
-        self.progress.setValue(0)
-        self._refresh(tr("{name} was uninstalled.", name=app.name))
+        self._render()
+        self.bar.status.setText(tr("{name} was uninstalled.", name=app.name))
 
     # ------------------------------------------------------------------
-    # Launching
-    # ------------------------------------------------------------------
-
-    def _launch_env(self) -> dict:
-        return installer.build_launch_env(self.app, self.store.option_values(self.app), self._session)
-
-    def _launch_main(self):
-        self._launch(self.app.executable)
-
-    def _launch(self, executable: str):
-        path = self._install_dir() / executable
-        try:
-            installer.launch(path, self._launch_env())
-        except Exception as exc:  # noqa: BLE001
-            messages.error(self, tr("Open application"), messages.describe(exc))
-            return
-        if self.store.pref("keep_open", False):
-            self.status.setText(tr("{name} started.", name=self.app.name))
-        else:
-            self.close()
-
-    # ------------------------------------------------------------------
-    # Title bar dialogs
+    # Dialogs
     # ------------------------------------------------------------------
 
     def _open_settings(self):
@@ -423,15 +870,14 @@ class MainWindow(FramelessWindow):
     def _open_downloads(self):
         DownloadsDialog(self.config.downloads, self.server, self.base_dir, self).exec()
 
-    def _report_bug(self):
-        webbrowser.open(self.config.support_url)
-
     # ------------------------------------------------------------------
-    # Startup: self-update of the launcher and the app
+    # Startup: launcher self-update, then app checks
     # ------------------------------------------------------------------
 
     def _startup_checks(self):
+        self._check_all(quiet=True)
         if self._self_update_failed:
+            self._self_update_pending = False
             messages.warning(
                 self, tr("Launcher update"),
                 tr("The new version was downloaded, but the executable could not be replaced.<br><br>"
@@ -439,81 +885,113 @@ class MainWindow(FramelessWindow):
                    "blocks the swap, or the folder is not writable. Close the other "
                    "instances and open the launcher again."),
             )
-            self._auto_update_app()
         elif self.config.self_update and self_update.is_frozen():
             self._check_self_update()
-        else:
-            self._auto_update_app()
-
-    def _auto_update_app(self):
-        if self._self_updating:
             return
-        if self.store.pref("auto_update", False) and installer.is_installed(self.base_dir, self.app):
-            self._check_updates(auto=True)
+        self._self_update_pending = False
+        self._process_queue()
+
+    def _self_update_done(self):
+        self._self_update_pending = False
+        self._process_queue()
 
     def _check_self_update(self):
         su = self.config.self_update
 
         def work(ctx):
+            if su.source == "github":
+                releases, _ = self.client.releases(su.github)
+                for release in releases:
+                    asset = github.pick_asset(release.assets, su.file_name)
+                    if asset is not None:
+                        return ("github", release, asset)
+                return None
             with self.server.connect() as ftp:
                 if not remote.try_cwd(ftp, su.remote_dir):
                     return None
                 try:
-                    return remote.stat(ftp, su.file_name)
+                    return ("ftp", remote.stat(ftp, su.file_name), None)
                 except Exception:  # noqa: BLE001 — no .exe published: nothing to do
                     return None
 
-        def done(rf):
-            if rf is None or not rf.size:
-                self._auto_update_app()
+        def done(found):
+            if not found:
+                self._self_update_done()
                 return
-            record = self.store.install_record(self_update.RECORD_KEY)
-            if not self_update.needs_update(record, rf.mdtm, rf.size, self_update.running_exe_size()):
-                if record is None:
-                    self.store.set_install_record(self_update.RECORD_KEY, rf.mdtm, rf.size)
-                self._auto_update_app()
-                return
+            kind, item, asset = found
+            if kind == "github":
+                if not github.is_newer(item.tag, __version__):
+                    self._self_update_done()
+                    return
+                when, key, size = item.tag, item.tag, asset.size or 0
+            else:
+                rf = item
+                if not rf.size:
+                    self._self_update_done()
+                    return
+                record = self.store.install_record(self_update.RECORD_KEY)
+                if not self_update.needs_update(record, rf.mdtm, rf.size, self_update.running_exe_size()):
+                    if record is None:
+                        self.store.set_install_record(self_update.RECORD_KEY, rf.mdtm, rf.size)
+                    self._self_update_done()
+                    return
+                when, key, size = remote.format_mdtm(rf.mdtm), rf.mdtm, rf.size
             if not self.store.pref("auto_update_launcher", False) and not messages.confirm(
                 self, tr("Launcher update"),
-                tr("A new launcher version is available (published on <b>{date}</b>)."
-                   "<br><br>Update now? The launcher will restart.", date=remote.format_mdtm(rf.mdtm)),
+                tr("A new launcher version is available (<b>{version}</b>).<br><br>"
+                   "Update now? The launcher will restart.", version=when),
                 confirm_label=tr("Update"), cancel_label=tr("Not now"),
             ):
-                self._auto_update_app()
+                self._self_update_done()
                 return
-            self._download_self_update(rf)
+            self._download_self_update(kind, item, asset, key, size)
 
-        Task.start_new(self, work, done, lambda exc: self._auto_update_app())
+        Task.start_new(self, work, done, lambda exc: self._self_update_done())
 
-    def _download_self_update(self, rf: remote.RemoteFile):
+    def _download_self_update(self, kind, item, asset, key: str, size: int):
         su = self.config.self_update
         exe = Path(sys.executable)
         new_exe = exe.with_name(f"{exe.stem}.new.exe")
         self._self_updating = True
-        self._set_busy(True, tr("Downloading the new launcher version…"))
+        self._render_bar()
+        self.bar.set_busy(True)
+        self.bar.status.setText(tr("Downloading the new launcher version…"))
+        self.bar.progress.set_value(None)
 
         def work(ctx):
-            with self.server.connect() as ftp:
-                ftp.cwd(su.remote_dir)
-                remote.download(ftp, su.file_name, new_exe, rf.size, on_progress=ctx.progress)
+            report = lambda done, total: ctx.report(done / total if total else None)  # noqa: E731
+            if kind == "github":
+                self.client.download(asset, new_exe, on_progress=report)
+            else:
+                with self.server.connect() as ftp:
+                    ftp.cwd(su.remote_dir)
+                    remote.download(ftp, su.file_name, new_exe, item.size, on_bytes=report)
 
         def done(_):
-            self.status.setText(tr("Restarting to apply the update…"))
-            self_update.apply(new_exe, rf.mdtm, rf.size)
+            self.bar.status.setText(tr("Restarting to apply the update…"))
+            self_update.apply(new_exe, key, size)
             QApplication.instance().quit()
 
         def fail(exc):
             self._self_updating = False
-            self._fail(tr("Launcher update"), exc)
+            self.bar.set_busy(False)
+            self._render_bar()
+            messages.error(self, tr("Launcher update"), messages.describe(exc))
+            self._self_update_done()
 
-        Task.start_new(self, work, done, fail, on_progress=self.progress.setValue)
+        Task.start_new(self, work, done, fail, on_report=self.bar.progress.set_value)
+
+    # ------------------------------------------------------------------
 
     def closeEvent(self, event):
-        if self._busy and not messages.confirm(
+        if (self._busy_app() is not None or self._self_updating) and not messages.confirm(
             self, tr("Operation in progress"),
             tr("A download or installation is in progress. Close anyway?"),
             confirm_label=tr("Close"), danger=True,
         ):
             event.ignore()
             return
+        for state in self.states.values():
+            if state.task is not None:
+                state.task.cancel()
         super().closeEvent(event)

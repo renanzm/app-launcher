@@ -68,6 +68,11 @@ def default_state_path(app_id: str) -> Path:
     return Path(root) / app_id / "state.json"
 
 
+def default_cache_dir(app_id: str) -> Path:
+    """GitHub responses and images (safe to delete)."""
+    return default_state_path(app_id).parent / "cache"
+
+
 class StateStore:
     """Dictionary persisted as JSON, written atomically on every change."""
 
@@ -154,6 +159,40 @@ class StateStore:
 
     def clear_install_record(self, key: str):
         self.delete("installed", key)
+
+    # -- installed applications -----------------------------------------
+    def installed(self, app_id: str) -> dict | None:
+        """Record of an installed app: key, version, published, size, executable.
+
+        Records written by older versions ({"mdtm", "size"}) get the key the FTP
+        source uses, so an app installed before is not reported as outdated.
+        """
+        raw = self.get("installed", app_id)
+        if not isinstance(raw, dict):
+            return None
+        record = dict(raw)
+        if not record.get("key"):
+            if not record.get("mdtm"):
+                return None
+            try:
+                size = int(record.get("size") or 0)
+            except (TypeError, ValueError):
+                size = 0
+            record["key"] = f"ftp:{record['mdtm']}:{size}"
+        return record
+
+    def set_installed(self, app_id: str, key: str, version: str = "", published: str = "",
+                      size: int | None = None, executable: str = ""):
+        from datetime import datetime, timezone
+
+        self.set("installed", app_id, {
+            "key": key,
+            "version": version,
+            "published": published,
+            "size": int(size or 0),
+            "executable": executable,
+            "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        })
 
     # -- secrets (DPAPI) -------------------------------------------------
     def secret(self, key: str) -> str | None:

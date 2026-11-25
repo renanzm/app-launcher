@@ -75,6 +75,15 @@ class StateStoreTests(unittest.TestCase):
         auth.clear_login(store)
         self.assertEqual(auth.load_saved_login(store), ("", "", False))
 
+    def test_installed_records(self):
+        store = StateStore(self.path)
+        store.set_install_record("old", "20260101000000", 42)          # written by launcher 2.x
+        self.assertEqual(store.installed("old")["key"], "ftp:20260101000000:42")
+        store.set_installed("new", "github:v1:7", "v1", "2026-11-20T10:00:00+00:00", 10, "App.exe")
+        record = StateStore(self.path).installed("new")
+        self.assertEqual((record["key"], record["version"], record["executable"]), ("github:v1:7", "v1", "App.exe"))
+        self.assertIsNone(store.installed("missing"))
+
     def test_corrupt_file_is_ignored(self):
         self.path.parent.mkdir(parents=True)
         self.path.write_text("{oops", encoding="utf-8")

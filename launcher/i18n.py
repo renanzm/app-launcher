@@ -99,3 +99,14 @@ def tr(text: str, **values) -> str:
 def tr_noop(text: str) -> str:
     """Marks a string for the catalogue without translating it yet."""
     return text
+
+
+def localized(text) -> str:
+    """A text from the configuration: a plain string, or {language: text} picked by the current language."""
+    if not isinstance(text, dict):
+        return "" if text is None else str(text)
+    by_code = {normalize(code) or str(code): value for code, value in text.items()}
+    for code in (_language, DEFAULT_LANGUAGE):
+        if by_code.get(code):
+            return by_code[code]
+    return next((v for v in text.values() if v), "")

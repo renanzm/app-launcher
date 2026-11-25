@@ -44,6 +44,56 @@ class SafeExtractTests(unittest.TestCase):
             self.assertEqual((dest / "user.cfg").read_text(), "mine")
 
 
+class InstallDownloadTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def app(self, **extra):
+        return make_config(apps=[{"id": "x", "name": "Sound Mod", "github": "o/sound-mod", **extra}]).apps[0]
+
+    def test_common_root(self):
+        self.assertEqual(installer.common_root(["App-v1/", "App-v1/app.exe", "App-v1/lib/x.dll"]), "App-v1")
+        self.assertEqual(installer.common_root(["app.exe", "lib/x.dll"]), "")
+        self.assertEqual(installer.common_root(["A/a.exe", "B/b.exe"]), "")
+        self.assertEqual(installer.common_root(["App/app.exe"], executable="App/app.exe"), "")
+
+    def test_zip_with_root_folder_is_flattened_and_exe_detected(self):
+        z = self.tmp / "pkg.zip"
+        _make_zip(z, {"SoundMod-v1/SoundMod.exe": b"x" * 2048, "SoundMod-v1/unins000.exe": b"u",
+                      "SoundMod-v1/docs/manual.html": b"m"})
+        dest = self.tmp / "out"
+        exe = installer.install_download(z, dest, self.app())
+        self.assertEqual(exe, "SoundMod.exe")
+        self.assertTrue((dest / "docs" / "manual.html").is_file())
+        self.assertFalse((dest / "SoundMod-v1").exists())
+
+    def test_single_exe_is_moved_into_place(self):
+        exe = self.tmp / "tool-v2.exe"
+        exe.write_bytes(b"MZ")
+        dest = self.tmp / "out"
+        self.assertEqual(installer.install_download(exe, dest, self.app()), "tool-v2.exe")
+        self.assertEqual((dest / "tool-v2.exe").read_bytes(), b"MZ")
+        exe.write_bytes(b"MZ2")
+        self.assertEqual(installer.install_download(exe, dest, self.app(executable="Tool.exe")), "Tool.exe")
+        self.assertEqual((dest / "Tool.exe").read_bytes(), b"MZ2")
+
+    def test_unsupported_file(self):
+        msi = self.tmp / "setup.msi"
+        msi.write_bytes(b"x")
+        with self.assertRaises(ValueError):
+            installer.install_download(msi, self.tmp / "out", self.app())
+
+    def test_resolve_root(self):
+        base = Path("C:/Launcher")
+        self.assertEqual(installer.resolve_root(base, ""), base)
+        self.assertEqual(installer.resolve_root(base, "Apps"), base / "Apps")
+        self.assertEqual(installer.resolve_root(base, "D:/Games"), Path("D:/Games"))
+
+
 class LaunchEnvTests(unittest.TestCase):
     def setUp(self):
         self.app = make_config().apps[0]

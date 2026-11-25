@@ -3,7 +3,7 @@
 Usage:
     pip install -r requirements-dev.txt
     python -m tools.demo_server            # listens on 127.0.0.1:2121 (demo/demo)
-    python -m launcher                     # in another terminal
+    python -m launcher --config tools/demo_config.json   # in another terminal
 
 Files are generated in `demo-server/` (ignored by git). Run with `--bump`
 to publish a "new version" of the apps and test the update flow.

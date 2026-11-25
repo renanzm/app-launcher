@@ -1,7 +1,9 @@
 """Single dark theme, applied on the QApplication (every window inherits it).
 
-The accent colour comes from `accent_color` in the configuration; the rest of
-the palette is neutral, so the launcher fits any brand.
+The accent colour comes from `accent_color` in the configuration (each app may
+bring its own accent for its page); the rest of the palette is neutral, so the
+launcher fits any brand. Headings use Bahnschrift — the condensed DIN face that
+ships with Windows — for the game-launcher look, with Segoe UI for body text.
 """
 
 from __future__ import annotations
@@ -16,6 +18,14 @@ from PyQt6.QtWidgets import QApplication, QWidget
 from . import icons
 
 FONT_FAMILIES = ["Segoe UI Variable Text", "Segoe UI", "Inter", "Arial"]
+DISPLAY_FAMILIES = ["Bahnschrift SemiBold SemiCondensed", "Bahnschrift", "Segoe UI Variable Display",
+                    "Segoe UI Semibold", "Segoe UI"]
+TITLE_FAMILIES = ["Bahnschrift Condensed", "Bahnschrift SemiBold Condensed", "Bahnschrift",
+                  "Segoe UI Black", "Segoe UI"]
+
+
+def _qss_families(families) -> str:
+    return ", ".join(f'"{f}"' for f in families)
 
 
 @dataclass(frozen=True)
@@ -24,32 +34,35 @@ class Palette:
     accent_hover: str
     accent_soft: str
     on_accent: str
-    bg: str = "#0F1115"
-    surface: str = "#161920"
-    surface_2: str = "#1E222B"
-    surface_3: str = "#262B36"
-    border: str = "#2A2F3A"
-    border_strong: str = "#3A4150"
-    text: str = "#E9EBF1"
+    bg: str = "#0B0D12"
+    chrome: str = "#0E1016"          # sidebar and action bar
+    surface: str = "#141720"
+    surface_2: str = "#1B1F29"
+    surface_3: str = "#252A36"
+    border: str = "#1F2430"
+    border_strong: str = "#353C4B"
+    text: str = "#ECEEF3"
     muted: str = "#9AA1B1"
-    faint: str = "#626A7B"
+    faint: str = "#5F6676"
     success: str = "#3FB950"
-    warning: str = "#D9A23A"
+    warning: str = "#E0A43A"
     danger: str = "#F2554B"
+
+
+def on_color(hex_color: str) -> str:
+    """Dark text on light colours, white on the rest (WCAG, approximate)."""
+    c = QColor(hex_color)
+    luminance = 0.2126 * c.redF() + 0.7152 * c.greenF() + 0.0722 * c.blueF()
+    return "#0B0D12" if luminance > 0.55 else "#FFFFFF"
 
 
 def make_palette(accent_hex: str) -> Palette:
     accent = QColor(accent_hex)
-    # Dark text on light colours, white on the rest (WCAG, approximate).
-    r, g, b = accent.redF(), accent.greenF(), accent.blueF()
-    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    soft = QColor(accent)
-    soft.setAlpha(40)
     return Palette(
         accent=accent.name(),
         accent_hover=accent.lighter(115).name(),
         accent_soft=f"rgba({accent.red()}, {accent.green()}, {accent.blue()}, 0.16)",
-        on_accent="#0F1115" if luminance > 0.6 else "#FFFFFF",
+        on_accent=on_color(accent_hex),
     )
 
 
@@ -58,6 +71,18 @@ _palette: Palette | None = None
 
 def palette() -> Palette:
     return _palette or make_palette("#7C5CFF")
+
+
+def display_font(point_size: float, weight: QFont.Weight = QFont.Weight.Normal,
+                 families=None, spacing: float = 0.0) -> QFont:
+    font = QFont()
+    font.setFamilies(list(families or DISPLAY_FAMILIES))
+    font.setPointSizeF(point_size)
+    font.setWeight(weight)
+    if spacing:
+        font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, spacing)
+    font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+    return font
 
 
 def _asset_dir() -> Path:
@@ -85,6 +110,8 @@ def _render_assets(pal: Palette) -> dict:
 
 
 def stylesheet(pal: Palette, assets: dict) -> str:
+    display = _qss_families(DISPLAY_FAMILIES)
+    title = _qss_families(TITLE_FAMILIES)
     return f"""
     * {{
         color: {pal.text};
@@ -95,6 +122,7 @@ def stylesheet(pal: Palette, assets: dict) -> str:
         border: 1px solid {pal.border};
         border-radius: 16px;
     }}
+    QWidget#LauncherWindow {{ background-color: {pal.bg}; }}
     QDialog, QMessageBox {{ background-color: {pal.bg}; }}
     QLabel {{ background: transparent; }}
     QLabel[role="window-title"] {{ font-size: 10.5pt; font-weight: 600; }}
@@ -103,8 +131,9 @@ def stylesheet(pal: Palette, assets: dict) -> str:
     QLabel[role="body"] {{ color: {pal.text}; }}
     QLabel[role="muted"] {{ color: {pal.muted}; }}
     QLabel[role="caption"] {{ color: {pal.muted}; font-size: 8.5pt; }}
+    QLabel[role="faint"] {{ color: {pal.faint}; font-size: 8.5pt; }}
     QLabel[role="overline"] {{
-        color: {pal.faint}; font-size: 7.5pt; font-weight: 700; letter-spacing: 1px;
+        color: {pal.faint}; font-family: {display}; font-size: 8.5pt; letter-spacing: 1.5px;
     }}
     QLabel[role="value"] {{ font-size: 10.5pt; font-weight: 600; }}
     QLabel[role="callout"] {{
@@ -112,10 +141,75 @@ def stylesheet(pal: Palette, assets: dict) -> str:
         border-radius: 10px; padding: 10px 12px;
     }}
     QLabel[role="callout-warning"] {{
-        color: {pal.warning}; background: rgba(217, 162, 58, 0.08);
-        border: 1px solid rgba(217, 162, 58, 0.30); border-radius: 10px; padding: 10px 12px;
+        color: {pal.warning}; background: rgba(224, 164, 58, 0.08);
+        border: 1px solid rgba(224, 164, 58, 0.30); border-radius: 10px; padding: 10px 12px;
     }}
 
+    /* -- launcher window ------------------------------------------------ */
+    QWidget#Sidebar {{ background: {pal.chrome}; border-right: 1px solid {pal.border}; }}
+    QWidget#ActionBar {{ background: {pal.chrome}; border-top: 1px solid {pal.border}; }}
+    QLabel[role="brand"] {{ font-family: {display}; font-size: 12.5pt; letter-spacing: 1px; }}
+    QLabel[role="brand-sub"] {{ color: {pal.faint}; font-size: 8pt; }}
+    QLabel[role="section"] {{
+        color: {pal.faint}; font-family: {display}; font-size: 8.5pt; letter-spacing: 2px;
+    }}
+    QPushButton[role="nav"] {{
+        background: transparent; border: none; border-radius: 0;
+        border-bottom: 2px solid transparent;
+        color: {pal.muted}; font-family: {display}; font-size: 11.5pt; letter-spacing: 1px;
+        padding: 0 2px; margin: 0 9px; min-height: 54px; max-height: 54px;
+    }}
+    QPushButton[role="nav"]:hover {{ color: {pal.text}; background: transparent; }}
+    QPushButton[role="nav"]:checked {{ color: {pal.text}; border-bottom: 2px solid {pal.accent}; }}
+    QPushButton[role="nav"]:disabled {{ color: {pal.faint}; background: transparent; border-color: transparent; }}
+    QPushButton[role="sidebar-action"] {{
+        background: transparent; border: 1px solid {pal.border}; border-radius: 8px;
+        color: {pal.muted}; font-family: {display}; font-size: 10pt; letter-spacing: 1px;
+        padding: 9px 12px; text-align: left;
+    }}
+    QPushButton[role="sidebar-action"]:hover {{
+        color: {pal.text}; background: {pal.surface}; border-color: {pal.border_strong};
+    }}
+    QLabel[role="hero-title"] {{
+        font-family: {title}; font-size: 40pt; font-weight: 700; letter-spacing: 1px;
+    }}
+    QLabel[role="hero-tagline"] {{ color: #D9DCE4; font-size: 12pt; }}
+    QLabel[role="hero-text"] {{ color: {pal.muted}; font-size: 10pt; }}
+    QLabel[role="chip"] {{
+        background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 11px; padding: 3px 10px; color: #D5D9E2; font-size: 8.5pt;
+    }}
+    QLabel[role="chip-warning"] {{
+        background: rgba(224, 164, 58, 0.12); border: 1px solid rgba(224, 164, 58, 0.35);
+        border-radius: 11px; padding: 3px 10px; color: {pal.warning}; font-size: 8.5pt;
+    }}
+    QFrame[role="glass"] {{
+        background: rgba(9, 11, 15, 0.80); border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+    }}
+    QFrame[role="glass"][clickable="true"]:hover {{
+        background: rgba(16, 19, 26, 0.88); border-color: rgba(255, 255, 255, 0.20);
+    }}
+    QLabel[role="card-title"] {{ font-family: {display}; font-size: 12pt; }}
+    QLabel[role="card-text"] {{ color: {pal.muted}; font-size: 9pt; }}
+    QLabel[role="info-label"] {{ color: {pal.faint}; font-size: 9pt; }}
+    QLabel[role="info-value"] {{ color: {pal.text}; font-size: 9pt; font-weight: 600; }}
+    QLabel[role="status"] {{ color: {pal.muted}; font-size: 9pt; }}
+    QLabel[role="status-detail"] {{ color: {pal.faint}; font-size: 8.5pt; }}
+
+    QTextBrowser[role="notes"] {{
+        background: transparent; border: none; color: {pal.text};
+        selection-background-color: {pal.accent}; selection-color: {pal.on_accent};
+    }}
+    QListWidget[role="releases"] {{
+        background: transparent; border: none; border-right: 1px solid {pal.border};
+        border-radius: 0; padding: 6px 8px 6px 0;
+    }}
+    QListWidget[role="releases"]::item {{ padding: 0; margin: 2px 0; border-radius: 8px; }}
+    QListWidget[role="releases"]::item:hover {{ background: {pal.surface}; }}
+    QListWidget[role="releases"]::item:selected {{ background: {pal.surface_2}; }}
+
+    /* -- generic widgets ----------------------------------------------- */
     QFrame[role="tile"] {{
         background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 12px;
     }}
@@ -123,7 +217,7 @@ def stylesheet(pal: Palette, assets: dict) -> str:
 
     QPushButton {{
         background: {pal.surface_2}; border: 1px solid {pal.border};
-        border-radius: 10px; padding: 9px 16px; font-weight: 500;
+        border-radius: 8px; padding: 9px 16px; font-weight: 500;
     }}
     QPushButton:hover {{ background: {pal.surface_3}; border-color: {pal.border_strong}; }}
     QPushButton:pressed {{ background: {pal.surface}; }}
@@ -149,20 +243,31 @@ def stylesheet(pal: Palette, assets: dict) -> str:
     QToolButton#IconButton:pressed {{ background: {pal.surface_3}; }}
     QToolButton#CloseButton {{ background: transparent; border: none; border-radius: 8px; padding: 5px; }}
     QToolButton#CloseButton:hover {{ background: #C42B1C; }}
+    QToolButton#WindowButton {{ background: transparent; border: none; border-radius: 0; }}
+    QToolButton#WindowButton:hover {{ background: rgba(255, 255, 255, 0.08); }}
+    QToolButton#WindowClose {{ background: transparent; border: none; border-radius: 0; }}
+    QToolButton#WindowClose:hover {{ background: #C42B1C; }}
+    QToolButton#OptionsButton {{
+        background: {pal.surface_2}; border: 1px solid {pal.border_strong}; border-radius: 8px;
+    }}
+    QToolButton#OptionsButton:hover {{ background: {pal.surface_3}; }}
+    QToolButton#OptionsButton:disabled {{ background: {pal.surface}; border-color: {pal.border}; }}
+    QToolButton#CancelButton {{ background: transparent; border: none; border-radius: 6px; }}
+    QToolButton#CancelButton:hover {{ background: rgba(242, 85, 75, 0.18); }}
 
     QComboBox {{
-        background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 12px;
-        padding: 8px 12px; min-height: 40px;
+        background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 10px;
+        padding: 6px 12px; min-height: 26px;
     }}
     QComboBox:hover {{ border-color: {pal.border_strong}; background: {pal.surface_2}; }}
     QComboBox:disabled {{ color: {pal.faint}; }}
-    QComboBox::drop-down {{ border: none; width: 34px; }}
+    QComboBox::drop-down {{ border: none; width: 30px; }}
     QComboBox::down-arrow {{ image: url({assets['chevron']}); width: 16px; height: 16px; }}
     QComboBox QAbstractItemView {{
         background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 10px;
         padding: 4px; selection-background-color: {pal.accent_soft}; selection-color: {pal.text};
     }}
-    QComboBox QAbstractItemView::item {{ min-height: 40px; padding: 2px 6px; border-radius: 8px; }}
+    QComboBox QAbstractItemView::item {{ min-height: 32px; padding: 2px 6px; border-radius: 8px; }}
 
     QLineEdit {{
         background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 10px;
@@ -224,15 +329,18 @@ def stylesheet(pal: Palette, assets: dict) -> str:
     QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
     QScrollBar::handle:vertical {{ background: {pal.surface_3}; border-radius: 3px; min-height: 30px; }}
     QScrollBar::handle:vertical:hover {{ background: {pal.border_strong}; }}
+    QScrollBar:horizontal {{ background: transparent; height: 8px; margin: 2px; }}
+    QScrollBar::handle:horizontal {{ background: {pal.surface_3}; border-radius: 3px; min-width: 30px; }}
     QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page {{
-        background: none; height: 0;
+        background: none; height: 0; width: 0;
     }}
 
     QMenu {{
-        background: {pal.surface}; border: 1px solid {pal.border}; border-radius: 10px; padding: 5px;
+        background: {pal.surface}; border: 1px solid {pal.border_strong}; border-radius: 10px; padding: 5px;
     }}
-    QMenu::item {{ padding: 8px 18px 8px 10px; border-radius: 7px; }}
+    QMenu::item {{ padding: 8px 22px 8px 10px; border-radius: 7px; }}
     QMenu::item:selected {{ background: {pal.surface_3}; }}
+    QMenu::item:disabled {{ color: {pal.faint}; }}
     QMenu::icon {{ padding-left: 8px; }}
     QMenu::separator {{ height: 1px; background: {pal.border}; margin: 4px 6px; }}
 
