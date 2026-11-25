@@ -29,6 +29,7 @@ class AppTile(QAbstractButton):
         self._name = name
         self._accent = accent
         self._icon = art.app_avatar(name, accent, ICON_SIZE)
+        self._icon_source = None                  # cacheKey of the pixmap shown (None = initials)
         self._status = ""
         self._status_color = theme.palette().faint
         self._badge = False
@@ -38,6 +39,10 @@ class AppTile(QAbstractButton):
         return QSize(220, TILE_HEIGHT)
 
     def set_icon(self, pixmap: QPixmap | None):
+        source = pixmap.cacheKey() if pixmap is not None else None
+        if source == self._icon_source:
+            return
+        self._icon_source = source
         self._icon = (art.rounded(pixmap, ICON_SIZE, 9) if pixmap is not None
                       else art.app_avatar(self._name, self._accent, ICON_SIZE))
         self.update()

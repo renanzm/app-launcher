@@ -202,6 +202,24 @@ def pick_asset(assets, pattern: str = "") -> Asset | None:
     return best if score(best) > -40 else None      # only builds for other platforms
 
 
+def pick_icon_asset(assets, executable: str = "", installed: Asset | None = None) -> Asset | None:
+    """The .exe asset whose icon best represents the app (None if the release has no .exe).
+
+    Prefers the executable the app launches, then the installed asset itself;
+    installers and uninstallers are skipped, since they often carry their own icon.
+    """
+    exes = [a for a in assets if a.kind == "exe"]
+    wanted = Path(executable.replace("\\", "/")).name.lower() if executable else ""
+    if wanted:
+        match = next((a for a in exes if a.name.lower() == wanted), None)
+        if match is not None:
+            return match
+    if installed is not None and installed.kind == "exe":
+        return installed
+    plain = [a for a in exes if not re.search(r"setup|install|unins|update", a.name, re.IGNORECASE)]
+    return plain[0] if plain else None
+
+
 _PRE_RELEASE = re.compile(r"^[\s._+-]*(a|alpha|b|beta|rc|pre|preview|dev|snapshot)", re.IGNORECASE)
 
 
@@ -405,6 +423,53 @@ class GitHubClient:
             partial.unlink(missing_ok=True)
             raise
         return target
+
+    def fetch_asset_icon(self, asset: Asset) -> Path | None:
+        """Icon of an .exe asset, read with HTTP range requests and cached on disk.
+
+        Only the PE headers and the resource section are downloaded. Returns
+        None when the asset has no icon (that answer is cached too).
+        """
+        from . import peicon
+
+        if self.cache_dir is None:
+            raise GitHubError("no cache folder")
+        folder = self.cache_dir / "icons"
+        stem = f"asset-{asset.id or hashlib.sha1(asset.download_url.encode('utf-8')).hexdigest()}"
+        for suffix in (".png", ".ico"):
+            if (folder / (stem + suffix)).is_file():
+                return folder / (stem + suffix)
+        if (folder / (stem + ".none")).is_file():
+            return None
+        if self.token and asset.api_url:
+            url = asset.api_url
+        else:
+            url = asset.download_url
+        session = self._session()
+
+        def read_at(offset: int, size: int) -> bytes:
+            headers = self._headers(url, "application/octet-stream")
+            headers["Range"] = f"bytes={offset}-{offset + size - 1}"
+            response = session.get(url, headers=headers, stream=True, timeout=self.timeout)
+            with response:
+                if response.status_code != 206:      # no range support: never pull the whole file
+                    self._raise_for(response, asset.name)
+                    raise GitHubError(tr("{name} cannot be read in parts.", name=asset.name))
+                data = bytearray()
+                for chunk in response.iter_content(_CHUNK):
+                    data.extend(chunk)
+                    if len(data) >= size:
+                        break
+                return bytes(data[:size])
+
+        try:
+            data, kind = peicon.extract(read_at)
+        except peicon.IconError:
+            _atomic_write(folder / (stem + ".none"), b"")
+            return None
+        path = folder / f"{stem}.{kind}"
+        _atomic_write(path, data)
+        return path
 
     def fetch_file(self, url: str, max_bytes: int = 12 * 1024 * 1024, max_age: int = 6 * 3600) -> Path:
         """A small file (image) by URL, cached on disk and revalidated after `max_age` seconds."""

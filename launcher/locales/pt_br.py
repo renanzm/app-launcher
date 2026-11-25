@@ -61,6 +61,7 @@ STRINGS = {
     "{what} was not found on GitHub (or it is private).": "{what} não foi encontrado no GitHub (ou é privado).",
     "GitHub answered with an error ({status}) for {what}.": "O GitHub respondeu com erro ({status}) para {what}.",
     "Could not reach GitHub: {error}": "Não foi possível acessar o GitHub: {error}",
+    "{name} cannot be read in parts.": "{name} não pode ser lido em partes.",
     "The SHA-256 of {name} does not match the one published on GitHub.":
         "O SHA-256 de {name} não confere com o publicado no GitHub.",
     "No release has been published yet.": "Nenhuma versão foi publicada ainda.",

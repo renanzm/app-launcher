@@ -14,7 +14,7 @@ Built with Python + PyQt6: a library of apps on the left, each app's artwork and
 
 - **Several sources, chosen per app**: **GitHub releases** — point an app at `owner/repo` and the launcher picks the Windows file of the latest release (a `.zip` or a single `.exe`) — or an **FTP/FTPS server**, with encrypted or remote credentials. New versions show up as updates on their own.
 - **Safe downloads**: written to a `.part` file and checked by size and SHA-256 (the digest GitHub publishes for each asset, or a `.sha256` file on the FTP server) before anything is installed. Zip extraction blocks *Zip Slip*, and a zip whose files sit inside one top-level folder is flattened.
-- **Game-launcher interface**: app library with real icons (taken from the installed `.exe`), a header with the app's banner or a backdrop generated from its accent colour plus its screenshot, cards with what's new, recent releases and repository stats, a **release notes** page that renders the Markdown (images included), and links to GitHub, issues and the project's website.
+- **Game-launcher interface**: app library with each app's real icon (read from its `.exe`, even before it is installed), a header with the app's banner or a backdrop generated from its accent colour plus its screenshot, cards with what's new, recent releases and repository stats, a **release notes** page that renders the Markdown (images included), and links to GitHub, issues and the project's website.
 - **Bilingual release notes**: when the notes are written in English and Portuguese, only the part in the interface language is shown.
 - **Progress like a store**: percentage, MB downloaded, speed and time left; downloads can be cancelled.
 - **Updates**: of every installed app on startup (optional) and of the launcher itself, from its own GitHub releases. Checks use conditional requests (ETag), so they barely touch the API limit, and keep working offline with the last data seen.
@@ -109,7 +109,7 @@ Copy `launcher_config.example.json` to `launcher_config.json` (next to `Launcher
 | `tagline`, `description` | Header texts. |
 | `banner` | Image that fills the header. Without it, the header is generated from `accent_color`. |
 | `screenshot` | Image shown framed in the header (ignored when there is a `banner`). |
-| `icon` | Library icon. Without it, the icon of the installed `.exe` is used, or the app's initials. |
+| `icon` | Library icon. Without it, the launcher uses the icon inside the app's `.exe`: the installed one or, before installing, the `.exe` published in the release (only the part of the file that holds the icon is downloaded). The app's initials are the last resort. |
 | `links[]` | Extra links in the top bar (`label`, `url`), after GitHub, Issues and the repository's website. |
 
 `tagline`, `description`, `banner`, `screenshot` and link labels may be a text or an object of translations (`{"en": ..., "pt-BR": ...}`). Images may be URLs (downloaded once and cached) or paths relative to the configuration file.

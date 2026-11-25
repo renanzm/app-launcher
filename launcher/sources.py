@@ -44,6 +44,7 @@ class AppInfo:
     repository: github.Repository | None = None
     offline: bool = False             # answered from the cache because the network failed
     problem: str = ""                 # why there is nothing to install, when that is the case
+    icon_asset: github.Asset | None = None   # .exe of the release whose icon represents the app
 
 
 def ftp_key(mdtm: str | None, size: int | None) -> str:
@@ -78,6 +79,13 @@ class GitHubAppSource:
                 payload=asset,
             ))
         latest = next((v for v in history if v.installable), None)
+        icon_asset = None
+        for release in releases:
+            icon_asset = github.pick_icon_asset(
+                release.assets, self.app.executable,
+                latest.payload if latest is not None and release.tag == latest.label else None)
+            if icon_asset is not None:
+                break
         problem = ""
         if not history:
             problem = tr("No release has been published yet.")
@@ -85,7 +93,7 @@ class GitHubAppSource:
             problem = (tr("No release has a file matching “{pattern}”.", pattern=self.app.asset)
                        if self.app.asset else tr("No release has a Windows file (.zip or .exe)."))
         return AppInfo(latest=latest, history=tuple(history), repository=repository,
-                       offline=offline_repo or offline_releases, problem=problem)
+                       offline=offline_repo or offline_releases, problem=problem, icon_asset=icon_asset)
 
     def download(self, version: Version, folder: Path, on_progress=None, cancelled=None) -> Path:
         return self.client.download(version.payload, Path(folder) / version.file_name,
