@@ -61,12 +61,21 @@ class LanguageTests(unittest.TestCase):
         self.assertEqual(i18n.tr("Install"), "Install")
         i18n.set_language("pt-BR")
         self.assertEqual(i18n.tr("Install"), "Instalar")
-        self.assertEqual(i18n.tr("Open {name}", name="X"), "Abrir X")
+        self.assertEqual(i18n.tr("Installed in {path}", path="X"), "Instalado em X")
         self.assertEqual(i18n.tr("Not in the catalogue {x}", x=1), "Not in the catalogue 1")
 
     def test_unknown_language_falls_back_to_english(self):
         self.assertEqual(i18n.set_language("klingon"), "en")
         self.assertEqual(i18n.tr("Install"), "Install")
+
+    def test_localized_config_text(self):
+        text = {"en": "Hello", "pt-BR": "Olá"}
+        self.assertEqual(i18n.localized(text), "Hello")
+        self.assertEqual(i18n.localized("plain"), "plain")
+        i18n.set_language("pt-BR")
+        self.assertEqual(i18n.localized(text), "Olá")
+        self.assertEqual(i18n.localized({"pt": "Oi"}), "Oi")
+        self.assertEqual(i18n.localized({"en": "Hi"}), "Hi", "falls back to English")
 
     def test_date_format_follows_language(self):
         self.assertRegex(remote.format_mdtm("20260102030405"), r"^2026-01-0[12] \d{2}:\d{2}$")

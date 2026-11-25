@@ -1,7 +1,9 @@
-"""Reusable components: frameless window, title bar, toggle and tasks."""
+"""Reusable components: frameless dialogs, title bar, toggle, labels and background tasks."""
 
 from __future__ import annotations
 
+import threading
+import time
 import traceback
 
 from PyQt6.QtCore import (
@@ -10,7 +12,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QColor, QPainter, QPainterPath
 from PyQt6.QtWidgets import (
-    QDialog, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QToolButton,
+    QDialog, QFrame, QGraphicsDropShadowEffect, QHBoxLayout, QLabel, QSizePolicy, QToolButton,
     QVBoxLayout, QWidget,
 )
 
@@ -25,6 +27,36 @@ def label(text: str = "", role: str = "body", wrap: bool = False) -> QLabel:
     lbl.setProperty("role", role)
     lbl.setWordWrap(wrap)
     return lbl
+
+
+class ElidedLabel(QLabel):
+    """One-line label that shortens its text with "…" to fit, showing the full text as a tooltip."""
+
+    def __init__(self, text: str = "", role: str = "body",
+                 mode: Qt.TextElideMode = Qt.TextElideMode.ElideRight, parent=None):
+        super().__init__(parent)
+        self.setProperty("role", role)
+        self._full = ""
+        self._mode = mode
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self.setMinimumWidth(20)
+        self.setText(text)
+
+    def setText(self, text: str):
+        self._full = text or ""
+        self._elide()
+
+    def full_text(self) -> str:
+        return self._full
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide()
+
+    def _elide(self):
+        shown = self.fontMetrics().elidedText(self._full, self._mode, max(0, self.width() - 2))
+        super().setText(shown)
+        self.setToolTip(self._full if shown != self._full else "")
 
 
 def divider() -> QFrame:
@@ -79,6 +111,17 @@ class TitleBar(QWidget):
         self._drag_offset = None
 
 
+class DragArea(QWidget):
+    """Empty area that moves the window natively (Aero Snap included) when dragged."""
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            handle = self.window().windowHandle()
+            if handle is not None and handle.startSystemMove():
+                return
+        super().mousePressEvent(event)
+
+
 class _FramelessMixin:
     """Builds the rounded card with shadow and the opening fade-in."""
 
@@ -128,16 +171,6 @@ class _FramelessMixin:
         self._fade.setEndValue(1.0)
         self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._fade.start()
-
-
-class FramelessWindow(_FramelessMixin, QWidget):
-    def __init__(self, title: str, width: int = 440, parent=None):
-        super().__init__(parent)
-        self._setup_frame(title, width, show_mark=True, closable=False)
-
-    def showEvent(self, event):
-        super().showEvent(event)
-        self._fade_in()
 
 
 class FramelessDialog(_FramelessMixin, QDialog):
@@ -219,49 +252,6 @@ class ToggleSwitch(QWidget):
         p.end()
 
 
-class StatusDot(QWidget):
-    def __init__(self, color: str = "#626A7B", parent=None):
-        super().__init__(parent)
-        self.setFixedSize(8, 8)
-        self._color = QColor(color)
-
-    def set_color(self, color: str):
-        self._color = QColor(color)
-        self.update()
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(self._color)
-        p.drawEllipse(QRectF(0, 0, 8, 8))
-        p.end()
-
-
-class VersionTile(QFrame):
-    """"Caption + value" card with a coloured indicator."""
-
-    def __init__(self, caption: str, parent=None):
-        super().__init__(parent)
-        self.setProperty("role", "tile")
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(14, 10, 14, 12)
-        lay.setSpacing(4)
-        head = QHBoxLayout()
-        head.setSpacing(6)
-        self.dot = StatusDot()
-        head.addWidget(self.dot)
-        head.addWidget(label(caption.upper(), "overline"))
-        head.addStretch()
-        lay.addLayout(head)
-        self.value = label("—", "value")
-        lay.addWidget(self.value)
-
-    def set_value(self, text: str, color: str):
-        self.value.setText(text)
-        self.dot.set_color(color)
-
-
 # ---------------------------------------------------------------------------
 # Background work
 # ---------------------------------------------------------------------------
@@ -271,12 +261,23 @@ class TaskContext:
 
     def __init__(self, task: "Task"):
         self._task = task
+        self._last_report = 0.0
 
     def progress(self, value: int):
         self._task.progress.emit(int(value))
 
     def status(self, text: str):
         self._task.status.emit(text)
+
+    def report(self, payload, force: bool = False):
+        """Arbitrary progress data (e.g. bytes done/total), at most ~12 times per second."""
+        now = time.monotonic()
+        if force or now - self._last_report >= 0.08:
+            self._last_report = now
+            self._task.reported.emit(payload)
+
+    def cancelled(self) -> bool:
+        return self._task.cancel_requested.is_set()
 
 
 class Task(QThread):
@@ -288,6 +289,7 @@ class Task(QThread):
 
     progress = pyqtSignal(int)
     status = pyqtSignal(str)
+    reported = pyqtSignal(object)
     succeeded = pyqtSignal(object)
     failed = pyqtSignal(object)
 
@@ -296,6 +298,10 @@ class Task(QThread):
     def __init__(self, fn, parent=None):
         super().__init__(parent)
         self._fn = fn
+        self.cancel_requested = threading.Event()
+
+    def cancel(self):
+        self.cancel_requested.set()
 
     def run(self):
         try:
@@ -308,7 +314,7 @@ class Task(QThread):
 
     @classmethod
     def start_new(cls, parent, fn, on_success=None, on_error=None,
-                  on_progress=None, on_status=None) -> "Task":
+                  on_progress=None, on_status=None, on_report=None) -> "Task":
         task = cls(fn, parent)
         queued = Qt.ConnectionType.QueuedConnection
         if on_success:
@@ -319,6 +325,8 @@ class Task(QThread):
             task.progress.connect(on_progress, queued)
         if on_status:
             task.status.connect(on_status, queued)
+        if on_report:
+            task.reported.connect(on_report, queued)
         cls._running.add(task)
 
         def _cleanup():

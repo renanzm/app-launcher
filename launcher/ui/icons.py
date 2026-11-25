@@ -189,12 +189,103 @@ def _lock(p: QPainter, c: QColor):
     p.drawPath(path)
 
 
+def _external(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 2.0))
+    p.drawLine(QPointF(8, 16), QPointF(16, 8))
+    p.drawPolyline([QPointF(9.5, 8), QPointF(16, 8), QPointF(16, 14.5)])
+
+
+def _star(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 1.6))
+    path = QPainterPath()
+    for i in range(10):
+        r = 8.5 if i % 2 == 0 else 3.8
+        a = math.radians(-90 + i * 36)
+        pt = QPointF(12 + r * math.cos(a), 12.6 + r * math.sin(a))
+        path.moveTo(pt) if i == 0 else path.lineTo(pt)
+    path.closeSubpath()
+    p.drawPath(path)
+
+
+def _fork(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 1.7))
+    for x, y in ((7, 5.5), (17, 5.5), (12, 18.5)):
+        p.drawEllipse(QPointF(x, y), 2.2, 2.2)
+    path = QPainterPath(QPointF(7, 7.7))
+    path.cubicTo(QPointF(7, 12), QPointF(12, 10.5), QPointF(12, 16.3))
+    p.drawPath(path)
+    path = QPainterPath(QPointF(17, 7.7))
+    path.cubicTo(QPointF(17, 12), QPointF(12, 10.5), QPointF(12, 16.3))
+    p.drawPath(path)
+
+
+def _tag(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 1.7))
+    path = QPainterPath(QPointF(4, 4.5))
+    path.lineTo(12, 4.5)
+    path.lineTo(20, 12.5)
+    path.lineTo(12.5, 20)
+    path.lineTo(4, 12)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.drawEllipse(QPointF(8.5, 9), 1.4, 1.4)
+
+
+def _globe(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 1.6))
+    p.drawEllipse(QPointF(12, 12), 8.5, 8.5)
+    p.drawEllipse(QPointF(12, 12), 3.8, 8.5)
+    p.drawLine(QPointF(3.5, 12), QPointF(20.5, 12))
+
+
+def _github(p: QPainter, c: QColor):
+    """Octocat-less 'code' mark: brackets with a slash."""
+    p.setPen(_pen(c, 1.8))
+    p.drawPolyline([QPointF(8, 7.5), QPointF(3.5, 12), QPointF(8, 16.5)])
+    p.drawPolyline([QPointF(16, 7.5), QPointF(20.5, 12), QPointF(16, 16.5)])
+    p.drawLine(QPointF(13.5, 5.5), QPointF(10.5, 18.5))
+
+
+def _notes(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 1.7))
+    p.drawRoundedRect(QRectF(5, 3.5, 14, 17), 2.2, 2.2)
+    for y in (8.5, 12, 15.5):
+        p.drawLine(QPointF(8.5, y), QPointF(15.5 if y < 15 else 12.5, y))
+
+
+def _grid(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 1.6))
+    for x, y in ((4.5, 4.5), (13.5, 4.5), (4.5, 13.5), (13.5, 13.5)):
+        p.drawRoundedRect(QRectF(x, y, 6, 6), 1.6, 1.6)
+
+
+def _stop(p: QPainter, c: QColor):
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawRoundedRect(QRectF(6.5, 6.5, 11, 11), 2, 2)
+
+
+def _alert(p: QPainter, c: QColor):
+    p.setPen(_pen(c, 1.7))
+    path = QPainterPath(QPointF(12, 4))
+    path.lineTo(20.5, 19)
+    path.lineTo(3.5, 19)
+    path.closeSubpath()
+    p.drawPath(path)
+    p.drawLine(QPointF(12, 9.5), QPointF(12, 13.5))
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(c)
+    p.drawEllipse(QPointF(12, 16.3), 1.05, 1.05)
+
+
 _PAINTERS = {
     "settings": _settings, "download": _download, "help": _help,
     "minimize": _minimize, "close": _close, "play": _play, "refresh": _refresh,
     "more": _more, "folder": _folder, "box": _box, "shield": _shield,
     "trash": _trash, "bug": _bug, "chevron-down": _chevron_down,
-    "check": _check, "user": _user, "lock": _lock,
+    "check": _check, "user": _user, "lock": _lock, "external": _external,
+    "star": _star, "fork": _fork, "tag": _tag, "globe": _globe, "github": _github,
+    "notes": _notes, "grid": _grid, "stop": _stop, "alert": _alert,
 }
 
 

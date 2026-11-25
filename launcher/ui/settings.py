@@ -18,7 +18,7 @@ from .widgets import FramelessDialog, ToggleSwitch, divider, label
 # (key, label, description) of the general preferences; translated when displayed.
 GENERAL_PREFS = (
     ("auto_update", tr_noop("Update applications on startup"),
-     tr_noop("Installs the new version of the selected application by itself, if it is already installed.")),
+     tr_noop("Installs new versions of the installed applications by itself.")),
     ("auto_update_launcher", tr_noop("Update the launcher on startup"),
      tr_noop("Without this option, the launcher asks before updating itself.")),
     ("keep_open", tr_noop("Keep the launcher open"),

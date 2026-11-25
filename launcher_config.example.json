@@ -4,68 +4,58 @@
   "accent_color": "#7C5CFF",
   "language": "auto",
   "support_url": "https://github.com/renanzm/app-launcher/issues/new",
-
-  "server": {
-    "protocol": "ftp",
-    "host": "127.0.0.1",
-    "port": 2121,
-    "user": "demo",
-    "password": "demo"
-  },
-
-  "auth": {
-    "type": "none"
-  },
+  "install_root": "Apps",
 
   "self_update": {
-    "remote_dir": "/launcher",
+    "github": "renanzm/app-launcher",
     "file_name": "Launcher.exe"
   },
 
   "apps": [
     {
-      "id": "notes",
-      "name": "Notes Studio",
-      "description": "Demo application served by tools/demo_server.py.",
-      "remote_dir": "/apps/notes",
-      "package": "notes.zip",
-      "install_dir": "Notes Studio",
-      "executable": "notes.bat",
-      "env": { "NOTES_LAUNCHED_BY": "app-launcher" },
-      "extra_actions": [
-        { "label": "Open diagnostics tool", "executable": "diagnostics.bat" }
-      ],
-      "options": [
-        { "key": "verbose", "label": "Verbose mode", "type": "bool", "env": "NOTES_VERBOSE",
-          "description": "Shows extra messages on startup." },
-        { "key": "workspace", "label": "Default workspace folder", "type": "text", "env": "NOTES_WORKSPACE",
-          "default": "C:\\Notes" }
+      "id": "sound-mod",
+      "name": "Sound Mod",
+      "github": "renanzm/sound-mod-rs",
+      "asset": "SoundMod-*-windows-x64.zip",
+      "executable": "SoundMod.exe",
+      "accent_color": "#E879F9",
+      "tagline": {
+        "en": "A soundboard that plays straight into your microphone.",
+        "pt-BR": "Soundboard que toca direto no seu microfone."
+      },
+      "description": {
+        "en": "Press a key and the sound goes out through your mic — on Discord, in game or on a call — while you keep talking. Global hotkeys, live voice effects and PC audio clips, in a single .exe.",
+        "pt-BR": "Aperte uma tecla e o som sai no seu microfone — no Discord, no jogo ou na call — enquanto você continua falando. Hotkeys globais, efeitos de voz ao vivo e clipes do áudio do PC, num único .exe."
+      },
+      "screenshot": {
+        "en": "https://raw.githubusercontent.com/renanzm/sound-mod-rs/master/docs/screenshot.png",
+        "pt-BR": "https://raw.githubusercontent.com/renanzm/sound-mod-rs/master/docs/screenshot-pt.png"
+      },
+      "links": [
+        {
+          "label": "Manual",
+          "url": "https://github.com/renanzm/sound-mod-rs/blob/master/docs/MANUAL.md"
+        }
       ]
     },
     {
-      "id": "reports",
-      "name": "Reports Viewer",
-      "description": "Second demo application, with no extra options.",
-      "remote_dir": "/apps/reports",
-      "package": "reports.zip",
-      "install_dir": "Reports Viewer",
-      "executable": "reports.bat"
-    }
-  ],
-
-  "downloads": [
-    {
-      "label": "Tools",
-      "remote_dir": "/tools",
-      "destination": "Downloads/Tools",
-      "extra_files": [
-        { "name": "sample-data.csv", "remote_dir": "/apps/reports", "badge": "Reports" }
-      ]
-    },
-    {
-      "label": "Installers",
-      "remote_dir": "/installers",
-      "destination": "Downloads/Installers"
+      "id": "usage-widget",
+      "name": "Usage Widget",
+      "github": "renanzm/cursor-usage-widget",
+      "asset": "*.exe",
+      "accent_color": "#34D399",
+      "tagline": {
+        "en": "Spend and plan limits of Claude Code, Codex and Cursor on your desktop.",
+        "pt-BR": "Gasto e limites do Claude Code, do Codex e do Cursor na sua área de trabalho."
+      },
+      "description": {
+        "en": "Sits on the edge of the screen as a small tab; hover it to see your spending pace, the 5-hour and weekly limits and the month's projection. Everything runs on your machine.",
+        "pt-BR": "Fica na borda da tela como uma abinha; passe o mouse para ver o ritmo de gasto, os limites de 5 horas e da semana e a projeção do mês. Tudo roda na sua máquina."
+      },
+      "screenshot": {
+        "en": "https://raw.githubusercontent.com/renanzm/cursor-usage-widget/master/docs/images/widget-open-dark.png",
+        "pt-BR": "https://raw.githubusercontent.com/renanzm/cursor-usage-widget/master/docs/images/widget-open-dark-pt.png"
+      }
     }
   ]
 }

@@ -190,12 +190,16 @@ def _parse_sha256(text: str | None) -> str | None:
 
 
 def download(ftp, name: str, target: Path, expected_size: int | None = None,
-             on_progress=None, verify_hash: bool = True) -> Path:
+             on_progress=None, verify_hash: bool = True, on_bytes=None, cancelled=None) -> Path:
     """Downloads `name` (from the current directory) to `target`, safely.
-    
+
     Writes to `<target>.part` and only renames at the end, after checking the
     size and — if the server publishes `<name>.sha256` — the hash.
+    `on_progress(percent)` and/or `on_bytes(done, total)` report progress;
+    `cancelled()` -> True aborts the transfer with `github.DownloadCancelled`.
     """
+    from .github import DownloadCancelled
+
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(target.name + ".part")
@@ -208,18 +212,21 @@ def download(ftp, name: str, target: Path, expected_size: int | None = None,
         with open(partial, "wb") as f:
             def write(chunk):
                 nonlocal done
+                if cancelled is not None and cancelled():
+                    raise DownloadCancelled()
                 f.write(chunk)
                 digest.update(chunk)
                 done += len(chunk)
                 if on_progress and expected_size:
                     on_progress(min(100, done * 100 // expected_size))
+                if on_bytes is not None:
+                    on_bytes(done, expected_size)
 
             ftp.retrbinary(f"RETR {name}", write, blocksize=64 * 1024)
 
         if expected_size and done != expected_size:
-            raise IntegrityError(
-                f"Download incompleto de {name}: {done} de {expected_size} bytes."
-            )
+            raise IntegrityError(tr("Incomplete download of {name}: {done} of {total} bytes.",
+                                    name=name, done=done, total=expected_size))
         if expected_hash and digest.hexdigest() != expected_hash:
             raise IntegrityError(tr("The SHA-256 of {name} does not match the one published on the server.", name=name))
         partial.replace(target)
@@ -283,6 +290,16 @@ def file_info(ftp, directory: str, name: str) -> RemoteFile:
         return RemoteFile(name, None, None, directory)
     finally:
         try_cwd(ftp, saved)
+
+
+def mdtm_datetime(mdtm: str | None) -> datetime | None:
+    """MDTM (UTC, YYYYMMDDHHMMSS[.fff]) -> aware datetime; None if missing or malformed."""
+    if not mdtm:
+        return None
+    try:
+        return datetime.strptime(mdtm[:14], "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 def format_mdtm(mdtm: str | None) -> str:
