@@ -164,7 +164,7 @@ With `server.credentials_url`, the credentials (`host`, `port`, `user`, `passwor
 
 ## Publishing
 
-**GitHub**: create a release with the app's `.zip` or `.exe` attached. GitHub computes each asset's SHA-256, which the launcher checks. The launcher updates itself the same way: publish a release of the repository in `self_update.github` with `Launcher.exe` attached and a tag newer than the running version (`v3.1.0` > `3.0.0`).
+**GitHub**: create a release with the app's `.zip` or `.exe` attached. GitHub computes each asset's SHA-256, which the launcher checks. The launcher updates itself the same way: publish a release of the repository in `self_update.github` with `Launcher.exe` attached and a tag newer than the running version (`v2.1.0` > `2.0.0`).
 
 **FTP**:
 
