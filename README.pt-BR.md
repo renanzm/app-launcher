@@ -2,7 +2,7 @@
 
 [English](README.md) · **Português (Brasil)**
 
-Launcher para Windows, no estilo dos launchers de jogos, que **instala, atualiza e executa aplicativos publicados como releases no GitHub** — ou distribuídos por FTP/FTPS. Tudo o que é específico de um ambiente — quais apps, de onde vêm, opções, login — fica num único `launcher_config.json`, então o mesmo executável serve para qualquer conjunto de aplicativos.
+Launcher para Windows, no estilo dos launchers de jogos, que **baixa, instala, atualiza e executa os seus aplicativos**. Cada app pode vir de uma fonte diferente — **releases do GitHub** ou um **servidor FTP/FTPS** — e tudo o que é específico de um ambiente (quais apps, de onde vêm, opções, login) fica num único `launcher_config.json`, então o mesmo executável serve para qualquer conjunto de aplicativos.
 
 Feito em Python + PyQt6: biblioteca de apps à esquerda, a arte e as notas de versão de cada app no centro, um botão grande para abrir embaixo, e todo o trabalho de rede fora da thread da interface. A interface está disponível em **inglês** e **português (Brasil)**.
 
@@ -12,14 +12,14 @@ Feito em Python + PyQt6: biblioteca de apps à esquerda, a arte e as notas de ve
 
 ## Funcionalidades
 
-- **Releases do GitHub como fonte**: aponte o app para `dono/repo` e o launcher encontra a release mais recente, escolhe o arquivo para Windows (um `.zip` ou um `.exe` único), baixa e instala. Releases novas aparecem sozinhas como atualização.
-- **Download seguro**: grava em `.part` e confere o tamanho e o **SHA-256 que o GitHub publica** para cada arquivo antes de instalar qualquer coisa. A extração bloqueia *Zip Slip*, e um zip com tudo dentro de uma única pasta é "achatado".
+- **Várias fontes, escolhidas por app**: **releases do GitHub** — aponte o app para `dono/repo` e o launcher pega o arquivo para Windows da release mais recente (um `.zip` ou um `.exe` único) — ou um **servidor FTP/FTPS**, com credenciais cifradas ou remotas. Versões novas aparecem sozinhas como atualização.
+- **Download seguro**: grava em `.part` e confere o tamanho e o SHA-256 (o que o GitHub publica para cada arquivo, ou um arquivo `.sha256` no servidor FTP) antes de instalar qualquer coisa. A extração bloqueia *Zip Slip*, e um zip com tudo dentro de uma única pasta é "achatado".
 - **Interface de launcher de jogo**: biblioteca com os ícones reais (tirados do `.exe` instalado), cabeçalho com o banner do app ou um fundo gerado a partir da cor dele mais o screenshot, cartões com novidades, versões recentes e dados do repositório, uma página de **notas de versão** que renderiza o Markdown (com imagens) e links para o GitHub, as issues e o site do projeto.
 - **Notas de versão bilíngues**: quando as notas estão em inglês e português, aparece só a parte no idioma da interface.
 - **Progresso de loja**: porcentagem, MB baixados, velocidade e tempo restante; o download pode ser cancelado.
 - **Atualizações**: de todos os apps instalados ao abrir (opcional) e do próprio launcher, pelas releases dele no GitHub. As consultas usam requisições condicionais (ETag), quase sem gastar o limite da API, e continuam funcionando offline com os últimos dados vistos.
 - **Opções por aplicativo** declaradas na configuração (liga/desliga, texto ou senha) que viram variáveis de ambiente do processo iniciado; **ações extras** para outros executáveis do pacote.
-- **FTP ou FTPS** continuam suportados, por app, com credenciais cifradas ou remotas, além de downloads avulsos em abas.
+- **Downloads avulsos** em abas (ferramentas, instaladores…) a partir do servidor FTP.
 - **Login opcional** via HTTP, com "lembrar dados" e entrada automática.
 - **Verificar integridade**, **abrir pasta de instalação** e **desinstalar**.
 - **Janela nativa** no Windows 11: sombra, cantos arredondados e snap, sem barra de título.

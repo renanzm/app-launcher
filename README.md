@@ -2,7 +2,7 @@
 
 **English** · [Português (Brasil)](README.pt-BR.md)
 
-A Windows launcher, in the style of a game launcher, that **installs, updates and runs applications published as GitHub releases** — or distributed over FTP/FTPS. Everything environment-specific — which apps, where they come from, options, login — lives in a single `launcher_config.json`, so the same executable works for any set of applications.
+A Windows launcher, in the style of a game launcher, that **downloads, installs, updates and runs your applications**. Each app can come from a different source — **GitHub releases** or an **FTP/FTPS server** — and everything environment-specific (which apps, where they come from, options, login) lives in a single `launcher_config.json`, so the same executable works for any set of applications.
 
 Built with Python + PyQt6: a library of apps on the left, each app's artwork and release notes in the middle, a big launch button at the bottom, and all network work kept off the UI thread. The interface is available in **English** and **Brazilian Portuguese**.
 
@@ -12,14 +12,14 @@ Built with Python + PyQt6: a library of apps on the left, each app's artwork and
 
 ## Features
 
-- **GitHub releases as the source**: point an app at `owner/repo` and the launcher finds the latest release, picks the Windows asset (a `.zip` or a single `.exe`), downloads it and installs it. New releases show up as updates on their own.
-- **Safe downloads**: written to a `.part` file and checked against the size and the **SHA-256 digest GitHub publishes** for each asset before anything is installed. Zip extraction blocks *Zip Slip*, and a zip whose files sit inside one top-level folder is flattened.
+- **Several sources, chosen per app**: **GitHub releases** — point an app at `owner/repo` and the launcher picks the Windows file of the latest release (a `.zip` or a single `.exe`) — or an **FTP/FTPS server**, with encrypted or remote credentials. New versions show up as updates on their own.
+- **Safe downloads**: written to a `.part` file and checked by size and SHA-256 (the digest GitHub publishes for each asset, or a `.sha256` file on the FTP server) before anything is installed. Zip extraction blocks *Zip Slip*, and a zip whose files sit inside one top-level folder is flattened.
 - **Game-launcher interface**: app library with real icons (taken from the installed `.exe`), a header with the app's banner or a backdrop generated from its accent colour plus its screenshot, cards with what's new, recent releases and repository stats, a **release notes** page that renders the Markdown (images included), and links to GitHub, issues and the project's website.
 - **Bilingual release notes**: when the notes are written in English and Portuguese, only the part in the interface language is shown.
 - **Progress like a store**: percentage, MB downloaded, speed and time left; downloads can be cancelled.
 - **Updates**: of every installed app on startup (optional) and of the launcher itself, from its own GitHub releases. Checks use conditional requests (ETag), so they barely touch the API limit, and keep working offline with the last data seen.
 - **Per-application options** declared in the configuration (toggle, text or password) that become environment variables of the launched process; **extra actions** for other executables in the package.
-- **FTP or FTPS** still supported, per app, with encrypted or remote credentials, plus standalone downloads in tabs.
+- **Standalone downloads** in tabs (tools, installers…) from the FTP server.
 - **Optional HTTP login**, with "remember me" and automatic sign-in.
 - **Verify integrity**, **open install folder** and **uninstall**.
 - **Native window** on Windows 11: shadow, rounded corners and snap, with no title bar.
