@@ -399,10 +399,13 @@ class MainWindow(QWidget):
         state = self.states[app.id]
         accent = QColor(self._accent(app)).lighter(125).name()
         installed = self._is_installed(app)
-        # Icon: configured image > the executable's own icon > initials.
+        # Icon: configured image > the installed .exe's icon > the icon of the .exe
+        # published in the release (before installing) > initials.
         pixmap = self.images.get(app.icon) if app.icon else None
         if pixmap is None and installed:
             pixmap = self.images.exe_icon(self._install_dir(app) / self._executable(app))
+        if pixmap is None and state.info is not None:
+            pixmap = self.images.release_icon(state.info.icon_asset)
         tile.set_icon(pixmap)
 
         if state.task is not None:
@@ -501,10 +504,9 @@ class MainWindow(QWidget):
                 else tr("Will be installed in {path}", path=folder))
         self.bar.hint.setText(hint)
 
-    def _on_image_loaded(self, ref: str):
+    def _on_image_loaded(self, _key: str):
         for app in self.config.apps:
-            if ref == app.icon:
-                self._render_tile(app)
+            self._render_tile(app)
 
     # ------------------------------------------------------------------
     # Pages

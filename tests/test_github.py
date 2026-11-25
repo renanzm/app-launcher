@@ -217,6 +217,17 @@ class GitHubSourceTests(unittest.TestCase):
         self.assertEqual([v.label for v in info.history], ["v2", "v1"])
         self.assertFalse(info.history[0].installable)
 
+    def test_icon_comes_from_the_launched_exe(self):
+        release = release_json("v1", assets=[asset_json("SoundMod-v1-windows-x64.zip", id_=1),
+                                             asset_json("SoundMod.exe", id_=2)])
+        info = sources.GitHubAppSource(self.app(asset="*.zip", executable="SoundMod.exe"),
+                                       FakeClient([release])).check()
+        self.assertEqual(info.latest.file_name, "SoundMod-v1-windows-x64.zip")
+        self.assertEqual(info.icon_asset.name, "SoundMod.exe")
+        info = sources.GitHubAppSource(self.app(asset="*.zip"),
+                                       FakeClient([release_json("v1", assets=[asset_json("a.zip")])])).check()
+        self.assertIsNone(info.icon_asset)
+
     def test_problems_are_reported(self):
         info = sources.GitHubAppSource(self.app(), FakeClient([])).check()
         self.assertIsNone(info.latest)

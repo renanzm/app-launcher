@@ -14,7 +14,7 @@ Feito em Python + PyQt6: biblioteca de apps à esquerda, a arte e as notas de ve
 
 - **Várias fontes, escolhidas por app**: **releases do GitHub** — aponte o app para `dono/repo` e o launcher pega o arquivo para Windows da release mais recente (um `.zip` ou um `.exe` único) — ou um **servidor FTP/FTPS**, com credenciais cifradas ou remotas. Versões novas aparecem sozinhas como atualização.
 - **Download seguro**: grava em `.part` e confere o tamanho e o SHA-256 (o que o GitHub publica para cada arquivo, ou um arquivo `.sha256` no servidor FTP) antes de instalar qualquer coisa. A extração bloqueia *Zip Slip*, e um zip com tudo dentro de uma única pasta é "achatado".
-- **Interface de launcher de jogo**: biblioteca com os ícones reais (tirados do `.exe` instalado), cabeçalho com o banner do app ou um fundo gerado a partir da cor dele mais o screenshot, cartões com novidades, versões recentes e dados do repositório, uma página de **notas de versão** que renderiza o Markdown (com imagens) e links para o GitHub, as issues e o site do projeto.
+- **Interface de launcher de jogo**: biblioteca com o ícone real de cada app (lido do `.exe` dele, mesmo antes de instalar), cabeçalho com o banner do app ou um fundo gerado a partir da cor dele mais o screenshot, cartões com novidades, versões recentes e dados do repositório, uma página de **notas de versão** que renderiza o Markdown (com imagens) e links para o GitHub, as issues e o site do projeto.
 - **Notas de versão bilíngues**: quando as notas estão em inglês e português, aparece só a parte no idioma da interface.
 - **Progresso de loja**: porcentagem, MB baixados, velocidade e tempo restante; o download pode ser cancelado.
 - **Atualizações**: de todos os apps instalados ao abrir (opcional) e do próprio launcher, pelas releases dele no GitHub. As consultas usam requisições condicionais (ETag), quase sem gastar o limite da API, e continuam funcionando offline com os últimos dados vistos.
@@ -109,7 +109,7 @@ Copie `launcher_config.example.json` para `launcher_config.json` (na pasta do `L
 | `tagline`, `description` | Textos do cabeçalho. |
 | `banner` | Imagem que preenche o cabeçalho. Sem ela, o cabeçalho é gerado a partir de `accent_color`. |
 | `screenshot` | Imagem mostrada com moldura no cabeçalho (ignorada quando há `banner`). |
-| `icon` | Ícone na biblioteca. Sem ele, vale o ícone do `.exe` instalado ou as iniciais do app. |
+| `icon` | Ícone na biblioteca. Sem ele, o launcher usa o ícone de dentro do `.exe` do app: o instalado ou, antes de instalar, o `.exe` publicado na release (só a parte do arquivo que guarda o ícone é baixada). As iniciais do app ficam como último recurso. |
 | `links[]` | Links extras na barra superior (`label`, `url`), depois de GitHub, Issues e o site do repositório. |
 
 `tagline`, `description`, `banner`, `screenshot` e os rótulos dos links podem ser um texto ou um objeto com traduções (`{"en": ..., "pt-BR": ...}`). Imagens podem ser URLs (baixadas uma vez e guardadas em cache) ou caminhos relativos ao arquivo de configuração.
